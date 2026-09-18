@@ -1,0 +1,660 @@
+{
+  "name": "Automação de Emails",
+  "nodes": [
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "SPREADSHEET_MIMES = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.oasis.opendocument.spreadsheet', 'text/csv']\nitem = _items[0]\nbinary = item.get(\"binary\", {}) or {}\nchave = next((k for k, v in binary.items() if v.get(\"mimeType\") in SPREADSHEET_MIMES), None)\nitem[\"json\"][\"temPlanilha\"] = chave is not None\npartes = [f\"{v.get('fileName', k)} ({v.get('mimeType', 'tipo desconhecido')})\" + (\" [PLANILHA]\" if k == chave else \"\") for k, v in binary.items()]\nitem[\"json\"][\"resumoAnexos\"] = \"; \".join(partes) if partes else \"nenhum anexo\"\nitem[\"json\"][\"chavePlanilha\"] = chave\nreturn [item]"
+      },
+      "id": "db8b1492-9949-41b7-af5c-96b01a831fcd",
+      "name": "Identifica Anexos",
+      "notesInFlow": true,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        -512
+      ],
+      "notes": "Olha os anexos do e-mail e monta: resumoAnexos (lista legivel de todos os arquivos) e chavePlanilha (identifica qual anexo e planilha, se houver)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b93679f1-d2fd-4746-96f0-a274468d83e2",
+              "leftValue": "={{ $json.temPlanilha }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7c53ceb8-6419-493b-bfe3-7d1a0a5cb033",
+      "name": "Tem Planilha?",
+      "notesInFlow": true,
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        -512
+      ],
+      "notes": "Checa se o e-mail tem planilha anexada. Se sim, segue pra extrair e ler a planilha. Se nao, vai direto pro resto do fluxo sem tentar ler nada."
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "={{ $json.chavePlanilha }}",
+        "options": {}
+      },
+      "id": "acc67c41-f4f9-4a44-b2f2-71eeb673c98b",
+      "name": "Converte Planilha em Linhas",
+      "notesInFlow": true,
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        -512
+      ],
+      "notes": "Le a planilha identificada e transforma cada linha da tabela em um item separado."
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "linhas = []\nfor i, item in enumerate(_items, start=1):\n    campos = item.get(\"json\", {})\n    partes = \", \".join(f\"{(f'Coluna {idx+1}' if chave.startswith('__EMPTY') else chave)}={valor}\" for idx, (chave, valor) in enumerate(campos.items()))\n    linhas.append(f\"Linha {i}: {partes}\")\nquebra = chr(10)\ntexto = quebra.join(linhas) if linhas else \"A planilha nao pode ser lida ou esta vazia.\"\nreturn [{\"json\": {\"conteudoPlanilha\": texto}}]"
+      },
+      "id": "6c387711-ae7b-42ab-a230-a01c87cfc8aa",
+      "name": "Resume Planilha em Texto",
+      "notesInFlow": true,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -512
+      ],
+      "notes": "Pega as linhas da planilha e resume tudo num texto unico e legivel (conteudoPlanilha), em vez de jogar a tabela crua pra IA."
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "c2bbefd1-8169-46a3-a01e-fcbca70081bf",
+      "name": "Junta Planilha + Anexos Originais",
+      "notesInFlow": true,
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        768,
+        -576
+      ],
+      "notes": "Junta o texto resumido da planilha com o e-mail original completo (incluindo as imagens e PDFs anexados), pra IA nao perder os outros anexos quando tem planilha junto."
+    },
+    {
+      "parameters": {},
+      "id": "f1bb2148-277e-4169-9b3f-7f1fbadba5ed",
+      "name": "Junta os Dois Caminhos",
+      "notesInFlow": true,
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1024,
+        -512
+      ],
+      "notes": "Une o caminho com planilha e o caminho sem planilha de volta em um so, garantindo que a leitura da planilha termine antes da IA rodar."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Remetente: {{ $('Identifica Anexos').item.json.from.value[0].name }} <{{ $('Identifica Anexos').item.json.from.value[0].address }}>\nAssunto/Título: {{ $('Identifica Anexos').item.json.subject }}\nCorpo da Mensagem: {{ $('Identifica Anexos').item.json.text }}\nAnexos/Arquivos: {{ $('Identifica Anexos').item.json.resumoAnexos }}\nConteudo da Planilha (se houver): {{ $('Resume Planilha em Texto').isExecuted ? $('Resume Planilha em Texto').item.json.conteudoPlanilha : 'nenhuma planilha anexada' }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# PAPEL E OBJETIVO\nVocê é um Assistente Executivo de E-mails altamente qualificado, empático e eficiente. Seu objetivo é analisar e-mails recebidos e redigir uma minuta/rascunho (draft) de resposta que soe como um e-mail curto e humano de verdade — não um relatório.\n\n# IDENTIDADE\nVocê assina as respostas em nome de: {{ $('Config').item.json.nomeUsuario }}\n(Esse nome vem do node \"Config\" no início do fluxo — pra reaproveitar este fluxo com outra pessoa, edite só esse node, nada aqui no prompt.)\n\n# DADOS DE ENTRADA QUE VOCÊ RECEBERÁ\nVocê receberá do fluxo do n8n os seguintes campos:\n- Data de hoje: {{ $today.toFormat('dd/MM/yyyy') }}\n- Remetente: {{ $('Identifica Anexos').item.json.from.text }}\n- Assunto/Título original: {{ $('Identifica Anexos').item.json.subject }}\n- Corpo da Mensagem: {{ $('Identifica Anexos').item.json.text }}\n- Anexos/Arquivos (se houver): {{ $('Identifica Anexos').item.json.resumoAnexos }}\n- Conteúdo da Planilha (se houver): {{ $('Resume Planilha em Texto').isExecuted ? $('Resume Planilha em Texto').item.json.conteudoPlanilha : 'nenhuma planilha anexada' }}\n- Pedido de regeneração: {{ $('Guarda Tentativa Anterior de E-mail').isExecuted ? ('sim - o usuário recusou esta versão anterior e pediu pra refazer:\\n\\nAssunto anterior: ' + $('Guarda Tentativa Anterior de E-mail').item.json.assuntoAnterior + '\\nCorpo anterior: ' + $('Guarda Tentativa Anterior de E-mail').item.json.corpoAnterior + '\\n\\nEscreva uma versão visivelmente diferente da anterior, mantendo a mesma informação.') : 'não' }}\nAlém disso, fotos e PDFs anexados chegam diretamente para você ver, não só como texto.\n\n---\n\n# DIRETRIZES DE ESTILO E TOM DE VOZ\n\n1. **Natural e humanizado, sempre:**\n   - Escreva como uma pessoa real escreveria num e-mail — tom de conversa, nunca como um relatório, laudo ou análise técnica.\n   - Evite jargões corporativos e frases clichês.\n   - Ajuste a formalidade ao tom do remetente: informal com informal, educado com formal.\n\n2. **Zero markdown, sempre texto puro:**\n   - Este e-mail é enviado como texto simples, não HTML. Nunca use asterisco para negrito, nunca use traço ou hífen como marcador de lista, nunca use \"#\" para título.\n   - Nunca organize a resposta em lista ou tópicos.\n\n3. **Estrutura em parágrafos, não em bloco único:**\n   - Separe o corpo em 2 a 3 parágrafos curtos, com uma linha em branco entre eles: saudação/contexto, conteúdo principal, fechamento. Sem marcadores, só quebra de parágrafo.\n\n4. **Anexos e imagens: um comentário só, nunca um inventário por arquivo:**\n   - Nunca cite nome de arquivo, extensão ou tipo. Comente o que você viu, com suas próprias palavras.\n   - Proibido dedicar um parágrafo ou frase separada para cada anexo, um de cada vez, na ordem em que chegaram (ex: uma frase pra imagem, outra pro logotipo dentro dela, outra pros PDFs, outra pra planilha). Isso soa como perícia técnica, não como e-mail. Junte tudo num único comentário fluido, como alguém que deu uma olhada geral em tudo de uma vez.\n   - Se houver PDFs com nomes de pessoas ou dados repetitivos, não recite a lista completa de nomes como um laudo. Resuma o resultado (ex: \"os nomes que você mandou\" ou só o que for relevante, tipo alguma exceção ao padrão) em vez de nomear um por um.\n   - Se não conseguir identificar nada específico e útil, um agradecimento breve e genuíno é melhor do que inventar detalhes.\n   - Se notar erros de português (ortografia, gramática, concordância) no texto dentro de algum arquivo anexado (PDF, imagem com texto, planilha), aponte isso educadamente dentro do mesmo comentário sobre os anexos — sem virar o foco da resposta e sem listar erro por erro.\n\n5. **Planilhas e tabelas: resuma, não transcreva:**\n   - Se receber dados de planilha, NÃO liste linha por linha nem recrie a tabela em texto. Comente em 1-2 frases o que chamou atenção — um total, uma inconsistência, algo fora do padrão.\n\n6. **Sem anexos, siga em frente:**\n   - Se não houver nenhum anexo, arquivo ou planilha, e o corpo do e-mail não mencionar nenhum arquivo esperado, não diga que não foi detectado nada. Continue a conversa normalmente.\n   - Exceção: se o remetente mencionou no texto um arquivo que deveria vir junto (ex: \"segue a planilha\") mas ele não chegou, pode avisar isso normalmente — é uma informação útil, não uma queixa técnica.\n\n7. **Datas: não julgue se parecem estranhas.**\n   - Você recebeu a data de hoje real em DADOS DE ENTRADA. Use-a como referência se precisar, mas não comente se uma data do e-mail \"parece fora do normal\" a menos que seja logicamente impossível (ex: 31 de fevereiro). Você não sabe o que é normal para o contexto do remetente.\n\n---\n\n# REGRAS DE SEGURANÇA E LIMITAÇÕES\n\n- Modo de aprovação: sua resposta é revisada por um humano pelo Telegram antes de ser enviada de verdade. Não assuma compromissos financeiros, contratuais ou jurídicos definitivos sem deixar um aviso para o revisor humano verificar.\n- Informações Faltantes: se o e-mail exigir dados que você não possui, deixe marcadores entre colchetes para o usuário preencher. Exemplo: [inserir data aqui].\n\n---\n\n# FORMATO DA SAÍDA\nResponda SEMPRE em JSON com exatamente dois campos: \"assunto\" e \"corpo\".\n\n\"assunto\": um título curto (até 8 palavras) que resuma o ponto principal da sua resposta. Não inclua \"Re:\" nem repita o assunto original literalmente — escreva um título novo, específico ao conteúdo da sua resposta.\n\n\"corpo\": o texto completo do e-mail, sem introduções como \"Aqui está o rascunho:\", sem markdown, sem listas. Saudação breve, corpo em parágrafos curtos conforme a diretriz 3, despedida, e assinatura com o nome exato definido em IDENTIDADE (nunca \"[Seu Nome]\").",
+          "passthroughBinaryImages": true,
+          "passthroughBinaryPdfs": true
+        }
+      },
+      "id": "85b409b5-233a-417e-a467-2a8647bf3bbe",
+      "name": "IA Redige a Resposta",
+      "notesInFlow": true,
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1280,
+        -512
+      ],
+      "notes": "O cerebro do fluxo: le remetente, assunto, corpo, anexos e planilha, ve as imagens/PDFs, e escreve a resposta seguindo as regras de tom definidas no System Message. Sai em JSON {assunto, corpo}."
+    },
+    {
+      "parameters": {
+        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "options": {
+          "responseFormat": "text"
+        }
+      },
+      "id": "ecfeac8d-781c-48d7-b6b9-fa85d041a9e3",
+      "name": "Modelo de IA (OpenRouter)",
+      "notesInFlow": true,
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        -320
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "SmN1IKu00Wb7HoNz",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "O modelo de linguagem em si (via OpenRouter). Alimenta tanto a IA Redige a Resposta quanto o Formata Saida da IA."
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"assunto\": \"Re: duvida sobre contrato\",\n  \"corpo\": \"Ola, tudo bem? ...\"\n}",
+        "autoFix": true
+      },
+      "id": "cec20bd0-288d-4a8c-928b-3d05793c6a27",
+      "name": "Formata Saida da IA",
+      "notesInFlow": true,
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1280,
+        -160
+      ],
+      "notes": "Obriga a resposta da IA a sair em JSON fixo: {assunto, corpo}. E o que permite separar titulo do corpo do e-mail."
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Identifica Anexos').item.json.id }}",
+        "emailType": "text",
+        "message": "={{ $('IA Redige a Resposta').item.json.output.corpo }}",
+        "options": {}
+      },
+      "id": "7e48b2e9-fc2a-4d6e-8053-42e58c9a2a05",
+      "name": "Envia Resposta por E-mail",
+      "webhookId": "8dbc9f15-342a-4acc-8966-2b36ce987bd1",
+      "notesInFlow": true,
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2368,
+        -608
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ctS958nMwCd0wdy1",
+          "name": "Gmail account 2"
+        }
+      },
+      "notes": "Pega o corpo gerado pela IA (ja aprovado pelo Telegram) e envia como reply direto na thread do e-mail original."
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "id": "74b6e1fe-0d86-4ed2-9aa0-803fd895d31a",
+      "name": "Modelo de IA (Fallback - Gemini)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        0
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "RYFEWcvSGo4OUNpf",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 📧 Automação de E-mails com IA\n\nChamado como sub-fluxo pelo workflow de Agendamento de Reuniões (quando o e-mail não é sobre reunião). Lê o e-mail inteiro — texto, fotos, PDFs e planilhas anexadas — e usa IA pra escrever a resposta. A resposta só é enviada depois de aprovação humana pelo Telegram.\n\n### Como funciona\n- **Sub-fluxo (Execute Workflow Trigger)** — recebe o id da mensagem do workflow de Agendamento, busca o e-mail completo com anexos.\n- **Não gostou da resposta?** Recusa no Telegram → a IA reescreve na hora, guardando a tentativa anterior como contexto, e pergunta de novo (sem precisar mexer em label do Gmail).\n\n### Por que isso é diferente\n- **Lê os anexos de verdade** — a IA enxerga imagem, PDF e planilha, não só o texto do e-mail.\n- **Sempre com humano no controle** — nada é enviado sem aprovação pelo Telegram.\n- **Resiliente** — se um modelo de IA falhar, outro assume na hora.\n\n✅ Migrado de rascunho manual pra envio direto com aprovação via Telegram em 17/09/2026.",
+        "height": 448,
+        "width": 3580
+      },
+      "id": "1d4ed148-8e08-4d65-b6db-6bb4dac2cdbf",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1072,
+        -1296
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "fd50b33b-bf32-4db2-8d7b-f921a6d4dd3e",
+      "name": "Gatilho - Execute Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1024,
+        -416
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.messageId }}",
+        "simple": false,
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "id": "7233221f-a3e0-435d-aaf2-cbb4a13201f9",
+      "name": "Busca Mensagem Completa",
+      "webhookId": "7944d7ed-4c2f-42c4-bcab-4917ce0ec23b",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -512,
+        -416
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ctS958nMwCd0wdy1",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Config').item.json.telegramChatId }}",
+        "message": "={{ 'Rascunho de resposta pronto. Posso enviar esse e-mail?\\n\\nAssunto: ' + $json.output.assunto + '\\n\\n' + $json.output.corpo }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Sim",
+            "disapproveLabel": "Não"
+          }
+        },
+        "chatApproval": true,
+        "options": {}
+      },
+      "id": "9f14de3a-d561-4d07-90c4-9a71adcc7ef9",
+      "name": "Notifica Usuário e Aguarda Aprovação (E-mail)",
+      "webhookId": "45ce78d1-de86-4ae7-9c03-f6d3f192227a",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        -512
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "St8sg0OaXu600fW3",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-aprovou-email-1",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8e6e5e5b-617a-4663-bc51-0f527b619f30",
+      "name": "Usuário Aprovou o E-mail?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2112,
+        -512
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assunto-anterior",
+              "name": "assuntoAnterior",
+              "value": "={{ $('IA Redige a Resposta').item.json.output.assunto }}",
+              "type": "string"
+            },
+            {
+              "id": "corpo-anterior",
+              "name": "corpoAnterior",
+              "value": "={{ $('IA Redige a Resposta').item.json.output.corpo }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a0594395-572c-4dd6-913d-1f60a954d487",
+      "name": "Guarda Tentativa Anterior de E-mail",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2368,
+        -416
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "config-nome-usuario",
+              "name": "nomeUsuario",
+              "value": "Seu Nome",
+              "type": "string"
+            },
+            {
+              "id": "config-telegram-chatid",
+              "name": "telegramChatId",
+              "value": "SEU_CHAT_ID_TELEGRAM",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "648b5636-17fb-4c9e-95c6-3f566cd42f9b",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -768,
+        -416
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 📥 Entrada e Configuração\n\nRecebe o id da mensagem do workflow de Agendamento e busca o e-mail completo no Gmail. O node Config guarda nome e chat do Telegram — único lugar a editar pra reaproveitar o fluxo.",
+        "height": 340,
+        "width": 700,
+        "color": 4
+      },
+      "id": "3e44434f-123a-4feb-894e-5d10c1406774",
+      "name": "Zona - Entrada e Configuracao",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1072,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🤖 Anexos e Geração da Resposta\n\nExtrai texto de planilhas anexadas, lê tudo com a IA (texto, imagem, PDF) e redige a resposta. Se o OpenRouter falhar, o Gemini assume na hora.",
+        "height": 804,
+        "width": 1880,
+        "color": 6
+      },
+      "id": "65be7cdc-906f-4c65-9e1d-8247b8a46d43",
+      "name": "Zona - Anexos e Geracao da Resposta",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        -656
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### ✅ Aprovação e Envio\n\nEnvia o rascunho pro Telegram antes de sair. Aprovado, responde a thread original. Recusado, a IA reescreve guardando a tentativa anterior.",
+        "height": 468,
+        "width": 732,
+        "color": 5
+      },
+      "id": "94f16197-13f7-4b90-abb3-16d4520ca987",
+      "name": "Zona - Aprovacao e Envio",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        -704
+      ]
+    }
+  ],
+  "connections": {
+    "Identifica Anexos": {
+      "main": [
+        [
+          {
+            "node": "Tem Planilha?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Junta Planilha + Anexos Originais",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Tem Planilha?": {
+      "main": [
+        [
+          {
+            "node": "Converte Planilha em Linhas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Junta os Dois Caminhos",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Converte Planilha em Linhas": {
+      "main": [
+        [
+          {
+            "node": "Resume Planilha em Texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume Planilha em Texto": {
+      "main": [
+        [
+          {
+            "node": "Junta Planilha + Anexos Originais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta Planilha + Anexos Originais": {
+      "main": [
+        [
+          {
+            "node": "Junta os Dois Caminhos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta os Dois Caminhos": {
+      "main": [
+        [
+          {
+            "node": "IA Redige a Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo de IA (OpenRouter)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "IA Redige a Resposta",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Formata Saida da IA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formata Saida da IA": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "IA Redige a Resposta",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo de IA (Fallback - Gemini)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "IA Redige a Resposta",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Busca Mensagem Completa": {
+      "main": [
+        [
+          {
+            "node": "Identifica Anexos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA Redige a Resposta": {
+      "main": [
+        [
+          {
+            "node": "Notifica Usuário e Aguarda Aprovação (E-mail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notifica Usuário e Aguarda Aprovação (E-mail)": {
+      "main": [
+        [
+          {
+            "node": "Usuário Aprovou o E-mail?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usuário Aprovou o E-mail?": {
+      "main": [
+        [
+          {
+            "node": "Envia Resposta por E-mail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guarda Tentativa Anterior de E-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guarda Tentativa Anterior de E-mail": {
+      "main": [
+        [
+          {
+            "node": "IA Redige a Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gatilho - Execute Workflow": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Busca Mensagem Completa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "pinData": {}
+}
