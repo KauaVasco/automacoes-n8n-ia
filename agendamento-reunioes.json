@@ -2,36 +2,30 @@
   "name": "Agendamento de Reuniões (Estrutura)",
   "nodes": [
     {
-      "parameters": {
-        "pollTimes": {
-          "item": [
-            {
-              "mode": "everyMinute"
-            }
-          ]
-        },
-        "filters": {
-          "q": "-category:promotions -category:social -category:updates -category:forums"
-        }
-      },
       "id": "e11aea18-e35b-4e65-afe3-a24008f34ad6",
       "name": "Gatilho - Novo E-mail (Reunião)",
       "notesInFlow": true,
+      "notes": "Gmail Trigger. Dispara a cada e-mail novo, pra checar se é sobre agendamento.",
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.4,
-      "position": [
-        0,
-        400
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
+      "position": [0, 400],
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "filters": { "q": "-category:promotions -category:social -category:updates -category:forums" }
       },
-      "notes": "Gmail Trigger. Dispara a cada e-mail novo, pra checar se é sobre agendamento."
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
+      "id": "93bd2f09-0861-4375-a4d1-4f117ebaad20",
+      "name": "Agente - Detecta Pedido de Reunião",
+      "notesInFlow": true,
+      "notes": "Lê o e-mail e decide: é sobre marcar/remarcar reunião ou não. Se for, extrai pessoa, data, hora (se tiver) e assunto.",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "position": [1040, 400],
       "parameters": {
         "promptType": "define",
         "text": "=Remetente: {{ $('Gatilho - Novo E-mail (Reunião)').item.json.From }}\nAssunto: {{ $('Gatilho - Novo E-mail (Reunião)').item.json.Subject }}\nCorpo: {{ $('Gatilho - Novo E-mail (Reunião)').item.json.snippet }}",
@@ -39,146 +33,77 @@
         "options": {
           "systemMessage": "# PAPEL E OBJETIVO\nVocê é um assistente que lê e-mails recebidos e decide se o e-mail é um pedido pra marcar, remarcar ou confirmar uma reunião. Se for, você extrai os dados necessários pra consultar a agenda e notificar o usuário depois.\n\n# IDENTIDADE\nVocê analisa e-mails recebidos na caixa de: {{ $('Config').item.json.nomeUsuario }}.\n\n# DADOS DE ENTRADA\n- Data de hoje: {{ $today.toFormat('dd/MM/yyyy') }}\n- Remetente, Assunto e Corpo do e-mail (você recebe isso na mensagem do usuário)\n\n# O QUE CONTA COMO \"PEDIDO DE REUNIÃO\"\nConta: pedidos pra marcar, agendar, remarcar ou confirmar uma reunião, call ou encontro com o dono da caixa.\nNão conta: e-mails que só citam a palavra \"reunião\" de passagem, newsletters, cobranças ou qualquer outro assunto sem pedido real de agendamento.\nNa dúvida entre \"é\" e \"não é\", marque como não é sobre reunião. É melhor deixar passar pra outro fluxo do que travar o agendamento com um falso positivo.\n\n# EXTRAÇÃO DE CAMPOS (só se for sobre reunião)\n- pessoa: nome de quem está pedindo a reunião (normalmente o remetente do e-mail).\n- emailPessoa: e-mail de quem está pedindo.\n- assunto: um resumo curto do MOTIVO da reunião (ex: \"Alinhamento de projeto\"). Nunca deixe só \"reunião\". NÃO inclua data nem horário no assunto — isso já vai em outro campo, e repetir deixa a mensagem final estranha. Se o e-mail não disser o motivo, use algo genérico como \"Reunião com \" + nome da pessoa, sem data.\n- temHorario: true se o e-mail menciona data E hora (ou algo resolvível com precisão, tipo \"amanhã às 15h\"). false se só pediu pra marcar sem dizer quando.\n- dataHoraReuniao: data e hora resolvidas em ISO (AAAA-MM-DDTHH:mm:00), usando a Data de hoje como referência pra expressões relativas. Só preencha se temHorario for true; senão deixe vazio.\n\n# REGRAS DE SEGURANÇA E LIMITAÇÕES\n- Nunca invente e-mail, nome ou horário que não está no texto.\n- Data/hora ambígua (ex: \"semana que vem\" sem dizer o dia) conta como temHorario: false — melhor perguntar de novo do que marcar errado.\n- Você não decide nada sozinho: seu papel é só detectar e extrair. Quem aceita, recusa ou confirma é o usuário humano depois.\n\n# FORMATO DA SAÍDA\nResponda SEMPRE em JSON com exatamente estes campos:\n{\n  \"souSobreReuniao\": true ou false,\n  \"pessoa\": \"string, vazio se não for sobre reunião\",\n  \"emailPessoa\": \"string, vazio se não for sobre reunião\",\n  \"assunto\": \"string, vazio se não for sobre reunião\",\n  \"temHorario\": true ou false,\n  \"dataHoraReuniao\": \"string ISO ou vazio\"\n}"
         }
-      },
-      "id": "93bd2f09-0861-4375-a4d1-4f117ebaad20",
-      "name": "Agente - Detecta Pedido de Reunião",
-      "notesInFlow": true,
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000,
-      "position": [
-        1040,
-        400
-      ],
-      "notes": "Lê o e-mail e decide: é sobre marcar/remarcar reunião ou não. Se for, extrai pessoa, data, hora (se tiver) e assunto."
+      }
     },
     {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "c6a73e7e-a07c-4bca-98e7-302cf3e8d75a",
-              "leftValue": "={{ $json.output.souSobreReuniao }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
       "id": "d3b6bc65-ea5e-4113-82ec-50a8c632a68a",
       "name": "É Sobre Reunião?",
       "notesInFlow": true,
+      "notes": "Se não for sobre reunião: vai pro outro agente (respostas curtas, projeto separado). Se for: segue o fluxo de agendamento.",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        1312,
-        400
-      ],
-      "notes": "Se não for sobre reunião: vai pro outro agente (respostas curtas, projeto separado). Se for: segue o fluxo de agendamento."
-    },
-    {
+      "position": [1312, 400],
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
           "conditions": [
-            {
-              "id": "30883e53-8e3b-45e6-b357-b071276956f5",
-              "leftValue": "={{ $json.output.temHorario }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
+            { "id": "c6a73e7e-a07c-4bca-98e7-302cf3e8d75a", "leftValue": "={{ $json.output.souSobreReuniao }}", "rightValue": "", "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
           ],
           "combinator": "and"
         },
         "options": {}
-      },
+      }
+    },
+    {
       "id": "e83d2961-4d50-4568-88fa-5c42a7a47156",
       "name": "Tem Horário Definido?",
       "notesInFlow": true,
+      "notes": "Não: pergunta a hora antes de continuar. Sim: já consulta a agenda.",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        1568,
-        400
-      ],
-      "notes": "Não: pergunta a hora antes de continuar. Sim: já consulta a agenda."
-    },
-    {
+      "position": [1568, 400],
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
           "conditions": [
-            {
-              "id": "c5125bd3-d967-48f8-9952-bd62f56aedde",
-              "leftValue": "={{ $json.data.approved }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
+            { "id": "30883e53-8e3b-45e6-b357-b071276956f5", "leftValue": "={{ $json.output.temHorario }}", "rightValue": "", "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
           ],
           "combinator": "and"
         },
         "options": {}
-      },
+      }
+    },
+    {
       "id": "315857b7-7936-47ac-b689-df12a6d2b073",
       "name": "Usuário Aceitou a Reunião?",
       "notesInFlow": true,
+      "notes": "Sim: monta confirmação pra pessoa. Não: encerra sem marcar.",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        2608,
-        1072
-      ],
-      "notes": "Sim: monta confirmação pra pessoa. Não: encerra sem marcar."
+      "position": [2608, 1072],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            { "id": "c5125bd3-d967-48f8-9952-bd62f56aedde", "leftValue": "={{ $json.data.approved }}", "rightValue": "", "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
     },
     {
+      "id": "359d49bb-5b86-4d6c-8c9c-a1ce27d5d3a6",
+      "name": "Registra Reunião na Tabela",
+      "notesInFlow": true,
+      "notes": "Data Table nativa do n8n (a criar). Campos: pessoa, data, hora, assunto, status (confirmada/aconteceu/não aconteceu), thread do e-mail.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [3648, 976],
       "parameters": {
         "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "ZjVIaRtWSZnKQjCv",
-          "mode": "list",
-          "cachedResultName": "reunioes_agendadas"
-        },
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "thread_id",
-              "keyValue": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}"
-            }
-          ]
-        },
+        "dataTableId": { "__rl": true, "value": "ZjVIaRtWSZnKQjCv", "mode": "list", "cachedResultName": "reunioes_agendadas" },
+        "filters": { "conditions": [{ "keyName": "thread_id", "keyValue": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}" }] },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
@@ -191,220 +116,103 @@
           },
           "matchingColumns": [],
           "schema": [
-            {
-              "id": "pessoa",
-              "displayName": "pessoa",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "email_pessoa",
-              "displayName": "email_pessoa",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "datetime_reuniao",
-              "displayName": "datetime_reuniao",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "assunto",
-              "displayName": "assunto",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "status",
-              "displayName": "status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "thread_id",
-              "displayName": "thread_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            }
+            { "id": "pessoa", "displayName": "pessoa", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "email_pessoa", "displayName": "email_pessoa", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "datetime_reuniao", "displayName": "datetime_reuniao", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "readOnly": false, "removed": false },
+            { "id": "assunto", "displayName": "assunto", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "thread_id", "displayName": "thread_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false }
           ],
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
         "options": {}
-      },
-      "id": "359d49bb-5b86-4d6c-8c9c-a1ce27d5d3a6",
-      "name": "Registra Reunião na Tabela",
-      "notesInFlow": true,
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        3648,
-        976
-      ],
-      "notes": "Data Table nativa do n8n (a criar). Campos: pessoa, data, hora, assunto, status (confirmada/aconteceu/não aconteceu), thread do e-mail."
+      }
     },
     {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "minutes"
-            }
-          ]
-        }
-      },
       "id": "22ed59c5-f09a-44f5-a327-b34c3963bb82",
       "name": "Gatilho - Verifica Reuniões",
       "notesInFlow": true,
+      "notes": "Roda a cada 5 minutos pra checar reuniões cujo horário já passou e ainda não têm confirmação de \"aconteceu\"/\"não aconteceu\".",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.4,
-      "position": [
-        0,
-        1856
-      ],
-      "notes": "Roda a cada 5 minutos pra checar reuniões cujo horário já passou e ainda não têm confirmação de \"aconteceu\"/\"não aconteceu\"."
+      "position": [0, 1856],
+      "parameters": { "rule": { "interval": [{ "field": "minutes" }] } }
     },
     {
-      "parameters": {
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "ZjVIaRtWSZnKQjCv",
-          "mode": "list",
-          "cachedResultName": "reunioes_agendadas"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "status",
-              "keyValue": "confirmada"
-            },
-            {
-              "keyName": "datetime_reuniao",
-              "condition": "lt",
-              "keyValue": "={{ $now.toISO() }}"
-            }
-          ]
-        }
-      },
       "id": "b9eb1469-dafe-4ce3-8f26-b1484db64323",
       "name": "Busca Reuniões Vencidas sem Confirmação",
       "notesInFlow": true,
+      "notes": "Filtra na tabela: status = confirmada E hora < agora. São as reuniões que já deveriam ter acontecido.",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
-      "position": [
-        528,
-        1856
-      ],
-      "notes": "Filtra na tabela: status = confirmada E hora < agora. São as reuniões que já deveriam ter acontecido."
+      "position": [528, 1856],
+      "parameters": {
+        "operation": "get",
+        "dataTableId": { "__rl": true, "value": "ZjVIaRtWSZnKQjCv", "mode": "list", "cachedResultName": "reunioes_agendadas" },
+        "matchType": "allConditions",
+        "filters": { "conditions": [{ "keyName": "status", "keyValue": "confirmada" }, { "keyName": "datetime_reuniao", "condition": "lt", "keyValue": "={{ $now.toISO() }}" }] }
+      }
     },
     {
-      "parameters": {
-        "content": "## 📅 Agendamento de Reuniões (Estrutura)\n\nFluxo ponta a ponta: e-mail chega → IA identifica se é pedido de reunião → confirma o horário (perguntando por e-mail quando falta) → aprovação humana pelo Telegram → agenda e confirma → depois verifica se a reunião realmente aconteceu.\n\n**Aprovação humana:** Telegram (botões nativos). **Estado:** Data Table do n8n. **IA:** OpenRouter, modelo gratuito com saída em JSON forçada.",
-        "height": 140,
-        "width": 3520
-      },
       "id": "5c7fcbaf-dccb-43b9-bae9-866c291f4db6",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        -64,
-        -304
-      ]
+      "position": [-64, -304],
+      "parameters": {
+        "content": "## 📅 Agendamento de Reuniões (Estrutura)\n\nFluxo ponta a ponta: e-mail chega → IA identifica se é pedido de reunião → confirma o horário (perguntando por e-mail quando falta) → aprovação humana pelo Telegram → agenda e confirma → depois verifica se a reunião realmente aconteceu.\n\n**Aprovação humana:** Telegram (botões nativos). **Estado:** Data Table do n8n. **IA:** OpenRouter, modelo gratuito com saída em JSON forçada.",
+        "height": 140,
+        "width": 3520
+      }
     },
     {
-      "parameters": {
-        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-        "options": {}
-      },
       "id": "2ecbb344-4557-4b3a-bde8-5b67053eeb34",
       "name": "Modelo de IA (OpenRouter)",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [
-        1040,
-        560
-      ],
-      "credentials": {
-        "openRouterApi": {
-          "id": "SmN1IKu00Wb7HoNz",
-          "name": "OpenRouter account"
-        }
-      }
+      "position": [1040, 560],
+      "parameters": { "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "options": {} },
+      "credentials": { "openRouterApi": { "id": "SmN1IKu00Wb7HoNz", "name": "OpenRouter account" } }
     },
     {
-      "parameters": {
-        "jsonSchemaExample": "{\n  \"souSobreReuniao\": true,\n  \"pessoa\": \"Maria Silva\",\n  \"emailPessoa\": \"maria@exemplo.com\",\n  \"assunto\": \"Alinhamento de projeto\",\n  \"temHorario\": true,\n  \"dataHoraReuniao\": \"2026-09-20T14:30:00\"\n}",
-        "autoFix": true
-      },
       "id": "182a48ab-9166-4767-a810-2a1f374b4e0a",
       "name": "Formata Saída da IA",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [
-        1040,
-        704
-      ]
+      "position": [1040, 704],
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"souSobreReuniao\": true,\n  \"pessoa\": \"Maria Silva\",\n  \"emailPessoa\": \"maria@exemplo.com\",\n  \"assunto\": \"Alinhamento de projeto\",\n  \"temHorario\": true,\n  \"dataHoraReuniao\": \"2026-09-20T14:30:00\"\n}",
+        "autoFix": true
+      }
     },
     {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "f1bad595-76e8-4766-be73-d8d789d0fa31",
-              "name": "assuntoConfirmacao",
-              "value": "={{ 'Confirmado: ' + $('Dados da Reunião Confirmados').item.json.assunto }}",
-              "type": "string"
-            },
-            {
-              "id": "ed109a9a-cef4-4eb2-90ee-b432b362829b",
-              "name": "corpoConfirmacao",
-              "value": "={{ 'Oi, ' + $('Dados da Reunião Confirmados').item.json.pessoa + '! Confirmado: nossa reunião vai ser no dia ' + DateTime.fromISO($('Dados da Reunião Confirmados').item.json.dataHoraReuniao, { zone: 'America/Sao_Paulo' }).toFormat(\"dd/MM/yyyy 'às' HH:mm\") + '. Qualquer imprevisto, me avise por aqui que a gente reagenda.' }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
       "id": "f5a4872a-61e5-4dda-b114-ff632b5f0c86",
       "name": "Monta Confirmação pra Pessoa (Rascunho)",
       "notesInFlow": true,
+      "notes": "Set (Edit Fields): monta assuntoConfirmacao e corpoConfirmacao com template fixo (sem IA — decisão de simplicidade, já que a aprovação humana já aconteceu no node \"Notifica Usuário e Aguarda Decisão\" anterior). Envia Confirmação pra Pessoa consome esses dois campos.",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        3120,
-        976
-      ],
-      "notes": "Set (Edit Fields): monta assuntoConfirmacao e corpoConfirmacao com template fixo (sem IA — decisão de simplicidade, já que a aprovação humana já aconteceu no node \"Notifica Usuário e Aguarda Decisão\" anterior). Envia Confirmação pra Pessoa consome esses dois campos."
+      "position": [3120, 976],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f1bad595-76e8-4766-be73-d8d789d0fa31", "name": "assuntoConfirmacao", "value": "={{ 'Confirmado: ' + $('Dados da Reunião Confirmados').item.json.assunto }}", "type": "string" },
+            { "id": "ed109a9a-cef4-4eb2-90ee-b432b362829b", "name": "corpoConfirmacao", "value": "={{ 'Oi, ' + $('Dados da Reunião Confirmados').item.json.pessoa + '! Confirmado: nossa reunião vai ser no dia ' + DateTime.fromISO($('Dados da Reunião Confirmados').item.json.dataHoraReuniao, { zone: 'America/Sao_Paulo' }).toFormat(\"dd/MM/yyyy 'às' HH:mm\") + '. Qualquer imprevisto, me avise por aqui que a gente reagenda.' }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      }
     },
     {
+      "id": "f58561eb-7719-4e7a-b835-729de78ef261",
+      "name": "Envia Confirmação pra Pessoa",
+      "webhookId": "479ac0f9-141f-47c0-8c09-7448c6b5c8bb",
+      "notesInFlow": true,
+      "notes": "Gmail \"Reply to a message\" (mesma thread do e-mail original). Envia direto (não é rascunho): a aprovação humana já aconteceu no node \"Notifica Usuário e Aguarda Decisão\" mais acima (o usuário clicou Sim). Usa o corpoConfirmacao montado no node anterior.",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [3392, 976],
       "parameters": {
         "operation": "reply",
         "messageId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.id }}",
@@ -412,110 +220,56 @@
         "message": "={{ $json.corpoConfirmacao }}",
         "options": {}
       },
-      "id": "f58561eb-7719-4e7a-b835-729de78ef261",
-      "name": "Envia Confirmação pra Pessoa",
-      "webhookId": "479ac0f9-141f-47c0-8c09-7448c6b5c8bb",
-      "notesInFlow": true,
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.2,
-      "position": [
-        3392,
-        976
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      },
-      "notes": "Gmail \"Reply to a message\" (mesma thread do e-mail original). Envia direto (não é rascunho): a aprovação humana já aconteceu no node \"Notifica Usuário e Aguarda Decisão\" mais acima (o usuário clicou Sim). Usa o corpoConfirmacao montado no node anterior."
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "resource": "draft",
-        "subject": "={{ 'Re: ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.assunto }}",
-        "message": "={{ 'Oi, ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.pessoa + '! Surgiu um imprevisto aqui e não vou conseguir comparecer à reunião como combinamos. Desculpa pelo transtorno — dá pra remarcarmos? Fico à disposição pra ajustar outro dia e horário.' }}",
-        "options": {
-          "threadId": "={{ $('Busca Reuniões Vencidas sem Confirmação').item.json.thread_id }}"
-        }
-      },
       "id": "d24ecdb1-5034-4fa5-8b4f-8fa7984dd382",
       "name": "Avisa Imprevisto pra Outra Pessoa (Rascunho)",
       "webhookId": "d4b80cf4-3ae9-4482-83f9-8750cd73c0cb",
       "notesInFlow": true,
+      "notes": "Gmail \"Create a draft\", reply na thread original (dados vêm de \"Busca Reuniões Vencidas sem Confirmação\", não do Agente - esse branch roda pelo gatilho agendado, não pelo e-mail). Rascunho de verdade: ninguém aprovou ainda mandar isso pra outra pessoa, então precisa de revisão humana manual no Gmail antes de enviar.",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
-      "position": [
-        2352,
-        1760
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
+      "position": [2352, 1760],
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ 'Re: ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.assunto }}",
+        "message": "={{ 'Oi, ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.pessoa + '! Surgiu um imprevisto aqui e não vou conseguir comparecer à reunião como combinamos. Desculpa pelo transtorno — dá pra remarcarmos? Fico à disposição pra ajustar outro dia e horário.' }}",
+        "options": { "threadId": "={{ $('Busca Reuniões Vencidas sem Confirmação').item.json.thread_id }}" }
       },
-      "notes": "Gmail \"Create a draft\", reply na thread original (dados vêm de \"Busca Reuniões Vencidas sem Confirmação\", não do Agente - esse branch roda pelo gatilho agendado, não pelo e-mail). Rascunho de verdade: ninguém aprovou ainda mandar isso pra outra pessoa, então precisa de revisão humana manual no Gmail antes de enviar."
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "resource": "calendar",
-        "calendar": {
-          "__rl": true,
-          "value": "={{ $('Config').item.json.calendarEmail }}",
-          "mode": "id"
-        },
-        "timeMin": "={{ $('Dados da Reunião Confirmados').item.json.dataHoraReuniao + '-03:00' }}",
-        "timeMax": "={{ DateTime.fromISO($('Dados da Reunião Confirmados').item.json.dataHoraReuniao, { zone: 'America/Sao_Paulo' }).plus({ hours: 1 }) }}",
-        "options": {}
-      },
       "id": "9ff4fc72-e910-431c-bfa6-f78091c15b30",
       "name": "Consulta Agenda do Usuário",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
-      "position": [
-        2080,
-        1072
-      ],
-      "credentials": {
-        "googleCalendarOAuth2Api": {
-          "id": "O8r7JcVc9Qt7MjfW",
-          "name": "Google Calendar account"
-        }
-      }
+      "position": [2080, 1072],
+      "parameters": {
+        "resource": "calendar",
+        "calendar": { "__rl": true, "value": "={{ $('Config').item.json.calendarEmail }}", "mode": "id" },
+        "timeMin": "={{ $('Dados da Reunião Confirmados').item.json.dataHoraReuniao + '-03:00' }}",
+        "timeMax": "={{ DateTime.fromISO($('Dados da Reunião Confirmados').item.json.dataHoraReuniao, { zone: 'America/Sao_Paulo' }).plus({ hours: 1 }) }}",
+        "options": {}
+      },
+      "credentials": { "googleCalendarOAuth2Api": { "id": "O8r7JcVc9Qt7MjfW", "name": "Google Calendar account" } }
     },
     {
+      "id": "c2b665f5-5ef1-4095-a555-e8104e39906e",
+      "name": "Busca Mensagens da Thread (Horário)",
+      "webhookId": "62e21b52-16e2-4a1c-be12-1fd2a13fbcad",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [2240, 144],
       "parameters": {
         "resource": "thread",
         "operation": "get",
         "threadId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}",
         "options": {}
       },
-      "id": "c2b665f5-5ef1-4095-a555-e8104e39906e",
-      "name": "Busca Mensagens da Thread (Horário)",
-      "webhookId": "62e21b52-16e2-4a1c-be12-1fd2a13fbcad",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.2,
-      "position": [
-        2240,
-        144
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "promptType": "define",
-        "text": "=Pessoa: {{ $('Agente - Detecta Pedido de Reunião').item.json.output.pessoa }}\nAssunto: {{ $('Agente - Detecta Pedido de Reunião').item.json.output.assunto }}\n\nMensagens da thread até agora:\n{{ JSON.stringify($json.messages) }}\n\nTentativa anterior rejeitada (se houver):\n{{ $json.mensagemAnterior || 'Nenhuma - esta é a primeira tentativa' }}",
-        "hasOutputParser": true,
-        "options": {
-          "systemMessage": "You are a helpful assistant# PAPEL E OBJETIVO\nVocê escreve, em nome do dono da caixa de e-mail, uma mensagem pedindo pra uma pessoa confirmar o dia e o horário de uma reunião que ela mesma pediu, mas não informou horário exato.\n\n# DADOS DE ENTRADA\nVocê recebe: o nome da pessoa, o assunto da reunião, as mensagens da thread até agora, e (se houver) o texto de uma tentativa anterior que o dono da caixa rejeitou.\n\n# DIRETRIZES DE ESTILO\n- Português natural. Tom humanizado, claro e objetivo - nada de linguagem robótica, genérica ou de \"assistente virtual\".\n- Curto: 2 a 4 frases.\n- Pergunte diretamente o dia e o horário que funcionam pra pessoa.\n- Se houver tentativa anterior rejeitada, escreva de um jeito visivelmente diferente dela (troque a abertura, a estrutura da frase, o jeito de perguntar), mantendo a mesma informação e o mesmo tom.\n- Se a thread já mostrar alguma resposta da pessoa sobre o horário, leve isso em conta em vez de ignorar e perguntar nome de novo.\n\n# REGRAS DE SEGURANÇA E LIMITAÇÕES\n- Não invente compromissos, datas ou informações que não estejam nos dados de entrada.\n- Não prometa nada em nome do dono da caixa além de perguntar o horário.\n\n# FORMATO DA SAÍDA\nResponda em JSON:\n{\n  \"assunto\": \"string, assunto do e-mail (ex: Re: <assunto original>)\",\n  \"mensagem\": \"string, corpo da mensagem\"\n}"
-        }
-      },
       "id": "1b9d7a49-eb87-44b2-bf30-470e7edb57aa",
       "name": "Agente - Escreve Pergunta de Horário",
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -523,100 +277,69 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
-      "position": [
-        2496,
-        144
-      ]
+      "position": [2496, 144],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Pessoa: {{ $('Agente - Detecta Pedido de Reunião').item.json.output.pessoa }}\nAssunto: {{ $('Agente - Detecta Pedido de Reunião').item.json.output.assunto }}\n\nMensagens da thread até agora:\n{{ JSON.stringify($json.messages) }}\n\nTentativa anterior rejeitada (se houver):\n{{ $json.mensagemAnterior || 'Nenhuma - esta é a primeira tentativa' }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a helpful assistant# PAPEL E OBJETIVO\nVocê escreve, em nome do dono da caixa de e-mail, uma mensagem pedindo pra uma pessoa confirmar o dia e o horário de uma reunião que ela mesma pediu, mas não informou horário exato.\n\n# DADOS DE ENTRADA\nVocê recebe: o nome da pessoa, o assunto da reunião, as mensagens da thread até agora, e (se houver) o texto de uma tentativa anterior que o dono da caixa rejeitou.\n\n# DIRETRIZES DE ESTILO\n- Português natural. Tom humanizado, claro e objetivo - nada de linguagem robótica, genérica ou de \"assistente virtual\".\n- Curto: 2 a 4 frases.\n- Pergunte diretamente o dia e o horário que funcionam pra pessoa.\n- Se houver tentativa anterior rejeitada, escreva de um jeito visivelmente diferente dela (troque a abertura, a estrutura da frase, o jeito de perguntar), mantendo a mesma informação e o mesmo tom.\n- Se a thread já mostrar alguma resposta da pessoa sobre o horário, leve isso em conta em vez de ignorar e perguntar nome de novo.\n\n# REGRAS DE SEGURANÇA E LIMITAÇÕES\n- Não invente compromissos, datas ou informações que não estejam nos dados de entrada.\n- Não prometa nada em nome do dono da caixa além de perguntar o horário.\n\n# FORMATO DA SAÍDA\nResponda em JSON:\n{\n  \"assunto\": \"string, assunto do e-mail (ex: Re: <assunto original>)\",\n  \"mensagem\": \"string, corpo da mensagem\"\n}"
+        }
+      }
     },
     {
-      "parameters": {
-        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-        "options": {}
-      },
       "id": "1d1dbb3e-77a0-45c6-b08b-f4246958939b",
       "name": "OpenRouter Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [
-        2496,
-        304
-      ],
-      "credentials": {
-        "openRouterApi": {
-          "id": "SmN1IKu00Wb7HoNz",
-          "name": "OpenRouter account"
-        }
-      }
+      "position": [2496, 304],
+      "parameters": { "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "options": {} },
+      "credentials": { "openRouterApi": { "id": "SmN1IKu00Wb7HoNz", "name": "OpenRouter account" } }
     },
     {
-      "parameters": {
-        "jsonSchemaExample": "{\n  \"assunto\": \"Re: Confirmar reunião\",\n  \"mensagem\": \"Oi! Recebi seu pedido de reunião, mas não vi o horário. Pode confirmar dia e hora?\"\n}",
-        "autoFix": true
-      },
       "id": "cf923f20-10bf-4387-a78b-bed2d7bd5d86",
       "name": "Formata Pergunta de Horário",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [
-        2496,
-        448
-      ]
+      "position": [2496, 448],
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"assunto\": \"Re: Confirmar reunião\",\n  \"mensagem\": \"Oi! Recebi seu pedido de reunião, mas não vi o horário. Pode confirmar dia e hora?\"\n}",
+        "autoFix": true
+      }
     },
     {
-      "parameters": {
-        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-        "options": {}
-      },
       "id": "8c100a2e-4269-40b8-8949-55ef24534737",
       "name": "OpenRouter Chat Model1",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
-      "position": [
-        2496,
-        592
-      ],
-      "credentials": {
-        "openRouterApi": {
-          "id": "SmN1IKu00Wb7HoNz",
-          "name": "OpenRouter account"
-        }
-      }
+      "position": [2496, 592],
+      "parameters": { "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "options": {} },
+      "credentials": { "openRouterApi": { "id": "SmN1IKu00Wb7HoNz", "name": "OpenRouter account" } }
     },
     {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "leftValue": "={{ $json.data.approved }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "id": "condition-1789570333898-jt2b2omh0"
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
       "id": "29db7c3f-3553-437c-b85c-7835594111e4",
       "name": "Usuário Aprovou a Pergunta de Horário?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        3024,
-        144
-      ]
+      "position": [3024, 144],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            { "leftValue": "={{ $json.data.approved }}", "rightValue": "", "operator": { "type": "boolean", "operation": "true", "singleValue": true }, "id": "condition-1789570333898-jt2b2omh0" }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
     },
     {
+      "id": "8fedaa6f-2ef0-4627-8575-ef5ac3ef450f",
+      "name": "Envia Pergunta de Horário pra Pessoa",
+      "webhookId": "61cab640-2ffb-4b04-b6f6-23c13f1bd88a",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [3280, 48],
       "parameters": {
         "operation": "reply",
         "messageId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.id }}",
@@ -624,117 +347,66 @@
         "message": "={{ $('Agente - Escreve Pergunta de Horário').item.json.output.mensagem }}",
         "options": {}
       },
-      "id": "8fedaa6f-2ef0-4627-8575-ef5ac3ef450f",
-      "name": "Envia Pergunta de Horário pra Pessoa",
-      "webhookId": "61cab640-2ffb-4b04-b6f6-23c13f1bd88a",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.2,
-      "position": [
-        3280,
-        48
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "name": "messages",
-              "value": "={{ $('Busca Mensagens da Thread (Horário)').item.json.messages }}",
-              "type": "array"
-            },
-            {
-              "name": "assuntoAnterior",
-              "value": "={{ $('Agente - Escreve Pergunta de Horário').item.json.output.assunto }}",
-              "type": "string"
-            },
-            {
-              "name": "mensagemAnterior",
-              "value": "={{ $('Agente - Escreve Pergunta de Horário').item.json.output.mensagem }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
       "id": "f176fba5-8e84-48da-8972-7d0509eafc9b",
       "name": "Guarda Tentativa Anterior de Horário",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        3280,
-        240
-      ]
+      "position": [3280, 240],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "messages", "value": "={{ $('Busca Mensagens da Thread (Horário)').item.json.messages }}", "type": "array" },
+            { "name": "assuntoAnterior", "value": "={{ $('Agente - Escreve Pergunta de Horário').item.json.output.assunto }}", "type": "string" },
+            { "name": "mensagemAnterior", "value": "={{ $('Agente - Escreve Pergunta de Horário').item.json.output.mensagem }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      }
     },
     {
-      "parameters": {
-        "operation": "sendAndWait",
-        "chatId": "={{ $('Config').item.json.telegramChatId }}",
-        "message": "={{ 'Chegou um pedido de reunião de ' + $('Dados da Reunião Confirmados').item.json.pessoa + ' (' + $('Dados da Reunião Confirmados').item.json.emailPessoa + '), sobre \"' + $('Dados da Reunião Confirmados').item.json.assunto + '\", para o dia ' + DateTime.fromISO($('Dados da Reunião Confirmados').item.json.dataHoraReuniao, { zone: 'America/Sao_Paulo' }).toFormat(\"dd/MM/yyyy 'às' HH:mm\") + '. Confirma se aceita marcar?' }}",
-        "approvalOptions": {
-          "values": {
-            "approvalType": "double",
-            "approveLabel": "Sim",
-            "disapproveLabel": "Não"
-          }
-        },
-        "chatApproval": true,
-        "options": {}
-      },
       "id": "86bbc467-db37-4b68-9d03-67135e99407d",
       "name": "Notifica Usuário e Aguarda Decisão",
       "webhookId": "edc39e91-0887-4d46-abd1-4af3d839cd68",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        2352,
-        1072
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "St8sg0OaXu600fW3",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
+      "position": [2352, 1072],
       "parameters": {
         "operation": "sendAndWait",
         "chatId": "={{ $('Config').item.json.telegramChatId }}",
-        "message": "={{ 'A IA escreveu essa mensagem pra pedir o horário pra ' + $('Agente - Detecta Pedido de Reunião').item.json.output.pessoa + ':\\n\\nAssunto: ' + $json.output.assunto + '\\n\\nMensagem:\\n' + $json.output.mensagem + '\\n\\nPode aprovar o envio?' }}",
-        "approvalOptions": {
-          "values": {
-            "approvalType": "double",
-            "approveLabel": "Sim",
-            "disapproveLabel": "Não"
-          }
-        },
+        "message": "={{ 'Chegou um pedido de reunião de ' + $('Dados da Reunião Confirmados').item.json.pessoa + ' (' + $('Dados da Reunião Confirmados').item.json.emailPessoa + '), sobre \"' + $('Dados da Reunião Confirmados').item.json.assunto + '\", para o dia ' + DateTime.fromISO($('Dados da Reunião Confirmados').item.json.dataHoraReuniao, { zone: 'America/Sao_Paulo' }).toFormat(\"dd/MM/yyyy 'às' HH:mm\") + '. Confirma se aceita marcar?' }}",
+        "approvalOptions": { "values": { "approvalType": "double", "approveLabel": "Sim", "disapproveLabel": "Não" } },
         "chatApproval": true,
         "options": {}
       },
+      "credentials": { "telegramApi": { "id": "St8sg0OaXu600fW3", "name": "Telegram account" } }
+    },
+    {
       "id": "58cde300-0b76-43e5-aed8-1ec7174f7d02",
       "name": "Notifica Usuário e Aguarda Aprovação (Horário)",
       "webhookId": "27eed497-2611-41f2-bffd-a3758c0c63bc",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        2752,
-        144
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "St8sg0OaXu600fW3",
-          "name": "Telegram account"
-        }
-      }
+      "position": [2752, 144],
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Config').item.json.telegramChatId }}",
+        "message": "={{ 'A IA escreveu essa mensagem pra pedir o horário pra ' + $('Agente - Detecta Pedido de Reunião').item.json.output.pessoa + ':\\n\\nAssunto: ' + $json.output.assunto + '\\n\\nMensagem:\\n' + $json.output.mensagem + '\\n\\nPode aprovar o envio?' }}",
+        "approvalOptions": { "values": { "approvalType": "double", "approveLabel": "Sim", "disapproveLabel": "Não" } },
+        "chatApproval": true,
+        "options": {}
+      },
+      "credentials": { "telegramApi": { "id": "St8sg0OaXu600fW3", "name": "Telegram account" } }
     },
     {
+      "id": "b6ce4206-f26d-478d-9100-5a9201895292",
+      "name": "Busca Thread pra Checar Label",
+      "webhookId": "4f4f9491-375a-4d7e-8bb0-ba337107b32d",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [528, 400],
       "parameters": {
         "resource": "thread",
         "operation": "get",
@@ -742,65 +414,26 @@
         "simple": false,
         "options": {}
       },
-      "id": "b6ce4206-f26d-478d-9100-5a9201895292",
-      "name": "Busca Thread pra Checar Label",
-      "webhookId": "4f4f9491-375a-4d7e-8bb0-ba337107b32d",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.2,
-      "position": [
-        528,
-        400
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "leftValue": "={{ $json.messages.some(m => (m.labels || []).some(l => l.id === 'Label_2763342194397371817')) }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "id": "condition-1789574220213-8c1qx1da1"
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
       "id": "e8397cb3-bb0f-412f-aca7-d07caf3fbaa5",
       "name": "Thread Tem Label Horário Pendente?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        784,
-        400
-      ]
+      "position": [784, 400],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            { "leftValue": "={{ $json.messages.some(m => (m.labels || []).some(l => l.id === 'Label_2763342194397371817')) }}", "rightValue": "", "operator": { "type": "boolean", "operation": "true", "singleValue": true }, "id": "condition-1789574220213-8c1qx1da1" }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
     },
     {
-      "parameters": {
-        "promptType": "define",
-        "text": "=Histórico da thread até agora:\n\n{{ $json.messages.map(m => 'De: ' + (m.From || '') + '\\nData: ' + (m.Date || '') + '\\nAssunto: ' + (m.Subject || '') + '\\nTrecho: ' + (m.snippet || '')).join('\\n---\\n') }}",
-        "hasOutputParser": true,
-        "options": {
-          "systemMessage": "# PAPEL E OBJETIVO\nVocê lê a resposta mais recente de uma thread de e-mail em que já foi perguntado o horário de uma reunião, e extrai os dados pra marcar essa reunião.\n\n# IDENTIDADE\nVocê analisa e-mails recebidos na caixa de: {{ $('Config').item.json.nomeUsuario }}.\n\n# DADOS DE ENTRADA\n- Data de hoje: {{ $today.toFormat('dd/MM/yyyy') }}\n- O histórico completo da thread (mensagens anteriores, incluindo o pedido original e a pergunta de horário que foi enviada)\n\n# O QUE FAZER\nA pessoa já foi perguntada sobre o horário de uma reunião. Extraia, olhando a resposta mais recente da thread e o restante do histórico, os dados da reunião.\n\nSe a resposta mais recente mencionar só um dia novo (sem repetir o horário) ou só um horário novo (sem repetir o dia), e o resto não for contestado, complete o que faltou com o último dia ou horário que **foi proposto como horário da reunião** antes na mesma thread (ex: no assunto do e-mail, ou numa frase tipo \"às 18h\"/\"18 horas\" falando da reunião em si) e que a pessoa não recusou. Isso não conta como inventar — é usar o que já está escrito no histórico.\n\nATENÇÃO: e-mails citados/respondidos trazem uma linha automática tipo \"Em [data] às [hora], [pessoa] escreveu:\" — essa hora é só o horário em que o e-mail foi ENVIADO, nunca o horário da reunião. Nunca use uma hora vinda dessa linha de citação como dataHoraReuniao.\n\nSó deixe o campo vazio se a thread não tiver, em nenhum ponto, um dia ou horário da reunião (fora das linhas de citação) pra completar.\n\n# EXTRAÇÃO DE CAMPOS\n- pessoa: nome de quem está respondendo (normalmente quem pediu a reunião originalmente).\n- emailPessoa: e-mail de quem está respondendo.\n- assunto: o MOTIVO da reunião, baseado no histórico da thread. Nunca deixe só \"reunião\". NÃO inclua data nem horário no assunto, mesmo que o assunto original do e-mail tenha data/horário — nesse caso, resuma só o motivo (ex: se o assunto do e-mail for \"Reunião às 18h dia 20/09\", o campo assunto deve ser algo como \"Reunião com \" + pessoa, sem a data).\n- dataHoraReuniao: data e hora resolvidas em ISO (AAAA-MM-DDTHH:mm:00), usando a Data de hoje como referência pra expressões relativas.\n\n# REGRAS DE SEGURANÇA E LIMITAÇÕES\n- Nunca invente e-mail, nome, assunto, dia ou horário que não estejam no texto ou no histórico da thread.\n- Nunca use horário de linha de citação (\"Em [data] às [hora], ... escreveu:\") como horário da reunião.\n- Se a resposta mais recente contradisser um dia ou horário anterior (ex: pede outro horário depois de já ter um marcado), use o valor mais recente, não o antigo.\n- Se depois de olhar a resposta mais recente e o histórico não houver um dia E um horário da reunião claramente resolvíveis, deixe dataHoraReuniao vazio em vez de arriscar.\n\n# FORMATO DA SAÍDA\nResponda SEMPRE em JSON com exatamente estes campos:\n{\n  \"pessoa\": \"string\",\n  \"emailPessoa\": \"string\",\n  \"assunto\": \"string\",\n  \"dataHoraReuniao\": \"string ISO ou vazio\"\n}"
-        }
-      },
       "id": "65b89162-5b54-44cd-abbe-359cab97f54c",
       "name": "Agente - Extrai Resposta de Horário",
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -808,479 +441,246 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
-      "position": [
-        1040,
-        1056
-      ]
-    },
-    {
+      "position": [1040, 1056],
       "parameters": {
-        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-        "options": {}
-      },
-      "id": "9b163196-864e-4933-9633-f6526ec029c9",
-      "name": "OpenRouter Chat Model2",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "typeVersion": 1,
-      "position": [
-        1040,
-        1216
-      ],
-      "credentials": {
-        "openRouterApi": {
-          "id": "SmN1IKu00Wb7HoNz",
-          "name": "OpenRouter account"
+        "promptType": "define",
+        "text": "=Histórico da thread até agora:\n\n{{ $json.messages.map(m => 'De: ' + (m.From || '') + '\\nData: ' + (m.Date || '') + '\\nAssunto: ' + (m.Subject || '') + '\\nTrecho: ' + (m.snippet || '')).join('\\n---\\n') }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "# PAPEL E OBJETIVO\nVocê lê a resposta mais recente de uma thread de e-mail em que já foi perguntado o horário de uma reunião, e extrai os dados pra marcar essa reunião.\n\n# IDENTIDADE\nVocê analisa e-mails recebidos na caixa de: {{ $('Config').item.json.nomeUsuario }}.\n\n# DADOS DE ENTRADA\n- Data de hoje: {{ $today.toFormat('dd/MM/yyyy') }}\n- O histórico completo da thread (mensagens anteriores, incluindo o pedido original e a pergunta de horário que foi enviada)\n\n# O QUE FAZER\nA pessoa já foi perguntada sobre o horário de uma reunião. Extraia, olhando a resposta mais recente da thread e o restante do histórico, os dados da reunião.\n\nSe a resposta mais recente mencionar só um dia novo (sem repetir o horário) ou só um horário novo (sem repetir o dia), e o resto não for contestado, complete o que faltou com o último dia ou horário que **foi proposto como horário da reunião** antes na mesma thread (ex: no assunto do e-mail, ou numa frase tipo \"às 18h\"/\"18 horas\" falando da reunião em si) e que a pessoa não recusou. Isso não conta como inventar — é usar o que já está escrito no histórico.\n\nATENÇÃO: e-mails citados/respondidos trazem uma linha automática tipo \"Em [data] às [hora], [pessoa] escreveu:\" — essa hora é só o horário em que o e-mail foi ENVIADO, nunca o horário da reunião. Nunca use uma hora vinda dessa linha de citação como dataHoraReuniao.\n\nSó deixe o campo vazio se a thread não tiver, em nenhum ponto, um dia ou horário da reunião (fora das linhas de citação) pra completar.\n\n# EXTRAÇÃO DE CAMPOS\n- pessoa: nome de quem está respondendo (normalmente quem pediu a reunião originalmente).\n- emailPessoa: e-mail de quem está respondendo.\n- assunto: o MOTIVO da reunião, baseado no histórico da thread. Nunca deixe só \"reunião\". NÃO inclua data nem horário no assunto, mesmo que o assunto original do e-mail tenha data/horário — nesse caso, resuma só o motivo (ex: se o assunto do e-mail for \"Reunião às 18h dia 20/09\", o campo assunto deve ser algo como \"Reunião com \" + pessoa, sem a data).\n- dataHoraReuniao: data e hora resolvidas em ISO (AAAA-MM-DDTHH:mm:00), usando a Data de hoje como referência pra expressões relativas.\n\n# REGRAS DE SEGURANÇA E LIMITAÇÕES\n- Nunca invente e-mail, nome, assunto, dia ou horário que não estejam no texto ou no histórico da thread.\n- Nunca use horário de linha de citação (\"Em [data] às [hora], ... escreveu:\") como horário da reunião.\n- Se a resposta mais recente contradisser um dia ou horário anterior (ex: pede outro horário depois de já ter um marcado), use o valor mais recente, não o antigo.\n- Se depois de olhar a resposta mais recente e o histórico não houver um dia E um horário da reunião claramente resolvíveis, deixe dataHoraReuniao vazio em vez de arriscar.\n\n# FORMATO DA SAÍDA\nResponda SEMPRE em JSON com exatamente estes campos:\n{\n  \"pessoa\": \"string\",\n  \"emailPessoa\": \"string\",\n  \"assunto\": \"string\",\n  \"dataHoraReuniao\": \"string ISO ou vazio\"\n}"
         }
       }
     },
     {
-      "parameters": {
-        "jsonSchemaExample": "{\n  \"pessoa\": \"Maria Silva\",\n  \"emailPessoa\": \"maria@exemplo.com\",\n  \"assunto\": \"Alinhamento de projeto\",\n  \"dataHoraReuniao\": \"2026-09-20T14:30:00\"\n}",
-        "autoFix": true
-      },
+      "id": "9b163196-864e-4933-9633-f6526ec029c9",
+      "name": "OpenRouter Chat Model2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [1040, 1216],
+      "parameters": { "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "options": {} },
+      "credentials": { "openRouterApi": { "id": "SmN1IKu00Wb7HoNz", "name": "OpenRouter account" } }
+    },
+    {
       "id": "65a48f24-b56c-4008-a604-f796f0235bb0",
       "name": "Formata Extração de Horário",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [
-        1040,
-        1360
-      ]
+      "position": [1040, 1360],
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"pessoa\": \"Maria Silva\",\n  \"emailPessoa\": \"maria@exemplo.com\",\n  \"assunto\": \"Alinhamento de projeto\",\n  \"dataHoraReuniao\": \"2026-09-20T14:30:00\"\n}",
+        "autoFix": true
+      }
     },
     {
-      "parameters": {
-        "resource": "thread",
-        "operation": "removeLabels",
-        "threadId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}",
-        "labelIds": [
-          "Label_2763342194397371817"
-        ]
-      },
       "id": "7ffbc9b2-dd5e-4e7d-9da3-17643f5d2794",
       "name": "Remove Label Horário Pendente",
       "webhookId": "bda0701c-3d64-4901-9a14-439586e2896b",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
-      "position": [
-        1312,
-        1056
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "position": [1312, 1056],
+      "parameters": {
+        "resource": "thread",
+        "operation": "removeLabels",
+        "threadId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}",
+        "labelIds": ["Label_2763342194397371817"]
+      },
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "name": "pessoa",
-              "value": "={{ $json.output ? $json.output.pessoa : $('Agente - Extrai Resposta de Horário').item.json.output.pessoa }}",
-              "type": "string"
-            },
-            {
-              "name": "emailPessoa",
-              "value": "={{ $json.output ? $json.output.emailPessoa : $('Agente - Extrai Resposta de Horário').item.json.output.emailPessoa }}",
-              "type": "string"
-            },
-            {
-              "name": "assunto",
-              "value": "={{ $json.output ? $json.output.assunto : $('Agente - Extrai Resposta de Horário').item.json.output.assunto }}",
-              "type": "string"
-            },
-            {
-              "name": "dataHoraReuniao",
-              "value": "={{ $json.output ? $json.output.dataHoraReuniao : $('Agente - Extrai Resposta de Horário').item.json.output.dataHoraReuniao }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
       "id": "cd00f9e6-6a54-4f50-a035-d0b3f658a569",
       "name": "Dados da Reunião Confirmados",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        1824,
-        1072
-      ]
+      "position": [1824, 1072],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "pessoa", "value": "={{ $json.output ? $json.output.pessoa : $('Agente - Extrai Resposta de Horário').item.json.output.pessoa }}", "type": "string" },
+            { "name": "emailPessoa", "value": "={{ $json.output ? $json.output.emailPessoa : $('Agente - Extrai Resposta de Horário').item.json.output.emailPessoa }}", "type": "string" },
+            { "name": "assunto", "value": "={{ $json.output ? $json.output.assunto : $('Agente - Extrai Resposta de Horário').item.json.output.assunto }}", "type": "string" },
+            { "name": "dataHoraReuniao", "value": "={{ $json.output ? $json.output.dataHoraReuniao : $('Agente - Extrai Resposta de Horário').item.json.output.dataHoraReuniao }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      }
     },
     {
-      "parameters": {
-        "resource": "thread",
-        "operation": "addLabels",
-        "threadId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}",
-        "labelIds": [
-          "Label_2763342194397371817"
-        ]
-      },
       "id": "333b587a-5c19-4b46-9128-891cb1fa0762",
       "name": "Aplica Label Horário Pendente",
       "webhookId": "d5ff8d7e-d930-4b7f-adbc-8345ee99f534",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
-      "position": [
-        1984,
-        144
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "position": [1984, 144],
+      "parameters": {
+        "resource": "thread",
+        "operation": "addLabels",
+        "threadId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}",
+        "labelIds": ["Label_2763342194397371817"]
+      },
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "content": "## 🔍 Verificador de Reuniões\n\nRoda a cada 5 min: reuniões vencidas sem confirmação são perguntadas pelo Telegram; se foi imprevisto, avisa a outra pessoa por rascunho de e-mail.",
-        "height": 384,
-        "width": 2632
-      },
       "id": "e8155e0a-6fdb-4b6c-ae1c-5f77f56da208",
       "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        -64,
-        1728
-      ]
+      "position": [-64, 1728],
+      "parameters": {
+        "content": "## 🔍 Verificador de Reuniões\n\nRoda a cada 5 min: reuniões vencidas sem confirmação são perguntadas pelo Telegram; se foi imprevisto, avisa a outra pessoa por rascunho de e-mail.",
+        "height": 384,
+        "width": 2632
+      }
     },
     {
+      "id": "133f30a0-0967-45f5-8975-927964f78202",
+      "name": "Zona - Entrada e Deteccao",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-96, 224],
       "parameters": {
         "content": "### 📩 Entrada & Detecção\n\nGmail Trigger pega o e-mail novo. Antes de acionar a IA, checa se a thread já tem a label 'Horário Pendente' — evita tratar uma resposta como pedido novo. Se não tiver, um Agente de IA decide se é sobre marcar reunião e se o horário já veio definido.",
         "height": 680,
         "width": 1860,
         "color": 4
-      },
-      "id": "133f30a0-0967-45f5-8975-927964f78202",
-      "name": "Zona - Entrada e Deteccao",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -96,
-        224
-      ]
+      }
     },
     {
+      "id": "26b39c50-8520-42d6-b8de-50523df0b721",
+      "name": "Zona - Pergunta de Horario",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1936, -48],
       "parameters": {
         "content": "### ❓ Pergunta de Horário\n\nQuando falta o horário, aplica a label 'Horário Pendente' e um Agente de IA escreve a pergunta. Antes de enviar, pede aprovação humana pelo Telegram — se reprovado, tenta de novo guardando a tentativa anterior como contexto (loop).",
         "height": 804,
         "width": 1544,
         "color": 6
-      },
-      "id": "26b39c50-8520-42d6-b8de-50523df0b721",
-      "name": "Zona - Pergunta de Horario",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1936,
-        -48
-      ]
+      }
     },
     {
+      "id": "162e9b42-1530-456b-b4c1-7ebb62423692",
+      "name": "Zona - Extracao da Resposta",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [816, 960],
       "parameters": {
         "content": "### 🔁 Extração da Resposta\n\nQuando a pessoa responde na mesma thread (label ainda pendente), um segundo Agente dedicado extrai o horário direto da resposta, sem reclassificar do zero. Remove a label ao concluir e segue pra confirmação.",
         "height": 512,
         "width": 856,
         "color": 3
-      },
-      "id": "162e9b42-1530-456b-b4c1-7ebb62423692",
-      "name": "Zona - Extracao da Resposta",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        816,
-        960
-      ]
+      }
     },
     {
+      "id": "2cbd9a42-6f59-448e-9afd-5bed71a931ff",
+      "name": "Zona - Convergencia e Confirmacao",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1792, 896],
       "parameters": {
         "content": "### 📅 Convergência & Confirmação\n\nPonto único onde as duas rotas (horário já veio / extraído da resposta) se encontram. Consulta a agenda, pede a decisão pelo Telegram e, se aceito, confirma por e-mail e registra na tabela.",
         "height": 494,
         "width": 2048,
         "color": 5
-      },
-      "id": "2cbd9a42-6f59-448e-9afd-5bed71a931ff",
-      "name": "Zona - Convergencia e Confirmacao",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1792,
-        896
-      ]
+      }
     },
     {
+      "id": "61355238-9804-4ea1-bf78-fd86e620c74a",
+      "name": "Marca Aguardando Resposta",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [784, 1856],
       "parameters": {
         "operation": "update",
-        "dataTableId": {
-          "__rl": true,
-          "value": "ZjVIaRtWSZnKQjCv",
-          "mode": "list",
-          "cachedResultName": "reunioes_agendadas"
-        },
-        "filters": {
-          "conditions": [
-            {
-              "keyValue": "={{ $json.id }}"
-            }
-          ]
-        },
+        "dataTableId": { "__rl": true, "value": "ZjVIaRtWSZnKQjCv", "mode": "list", "cachedResultName": "reunioes_agendadas" },
+        "filters": { "conditions": [{ "keyValue": "={{ $json.id }}" }] },
         "columns": {
           "mappingMode": "defineBelow",
-          "value": {
-            "status": "aguardando_resposta"
-          },
+          "value": { "status": "aguardando_resposta" },
           "matchingColumns": [],
           "schema": [
-            {
-              "id": "pessoa",
-              "displayName": "pessoa",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "email_pessoa",
-              "displayName": "email_pessoa",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "datetime_reuniao",
-              "displayName": "datetime_reuniao",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "assunto",
-              "displayName": "assunto",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "status",
-              "displayName": "status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "thread_id",
-              "displayName": "thread_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            }
+            { "id": "pessoa", "displayName": "pessoa", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": true },
+            { "id": "email_pessoa", "displayName": "email_pessoa", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": true },
+            { "id": "datetime_reuniao", "displayName": "datetime_reuniao", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "readOnly": false, "removed": true },
+            { "id": "assunto", "displayName": "assunto", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "thread_id", "displayName": "thread_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": true }
           ],
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
         "options": {}
-      },
-      "id": "61355238-9804-4ea1-bf78-fd86e620c74a",
-      "name": "Marca Aguardando Resposta",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1,
-      "position": [
-        784,
-        1856
-      ]
+      }
     },
     {
-      "parameters": {
-        "operation": "sendAndWait",
-        "chatId": "={{ $('Config (Verificador)').item.json.telegramChatId }}",
-        "message": "={{ 'Sua reunião com ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.pessoa + ' sobre \"' + $('Busca Reuniões Vencidas sem Confirmação').item.json.assunto + '\" estava marcada pra ' + DateTime.fromISO($('Busca Reuniões Vencidas sem Confirmação').item.json.datetime_reuniao, { zone: 'America/Sao_Paulo' }).toFormat(\"dd/MM 'às' HH:mm\") + '. Teve algum imprevisto e ela não aconteceu?' }}",
-        "approvalOptions": {
-          "values": {
-            "approvalType": "double",
-            "approveLabel": "Sim",
-            "disapproveLabel": "Não"
-          }
-        },
-        "chatApproval": true,
-        "options": {}
-      },
       "id": "e178c176-c9c6-48b9-a2eb-886a9a152aab",
       "name": "Pergunta se Usuário Compareceu",
       "webhookId": "de6efabe-81f1-4260-81f9-ab2f7eff964e",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [
-        1040,
-        1856
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "St8sg0OaXu600fW3",
-          "name": "Telegram account"
-        }
-      }
+      "position": [1040, 1856],
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Config (Verificador)').item.json.telegramChatId }}",
+        "message": "={{ 'Sua reunião com ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.pessoa + ' sobre \"' + $('Busca Reuniões Vencidas sem Confirmação').item.json.assunto + '\" estava marcada pra ' + DateTime.fromISO($('Busca Reuniões Vencidas sem Confirmação').item.json.datetime_reuniao, { zone: 'America/Sao_Paulo' }).toFormat(\"dd/MM 'às' HH:mm\") + '. Teve algum imprevisto e ela não aconteceu?' }}",
+        "approvalOptions": { "values": { "approvalType": "double", "approveLabel": "Sim", "disapproveLabel": "Não" } },
+        "chatApproval": true,
+        "options": {}
+      },
+      "credentials": { "telegramApi": { "id": "St8sg0OaXu600fW3", "name": "Telegram account" } }
     },
     {
+      "id": "10e2af46-8305-4d85-a341-afb379d0fba8",
+      "name": "Atualiza Status na Tabela",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [1312, 1856],
       "parameters": {
         "operation": "update",
-        "dataTableId": {
-          "__rl": true,
-          "value": "ZjVIaRtWSZnKQjCv",
-          "mode": "list",
-          "cachedResultName": "reunioes_agendadas"
-        },
-        "filters": {
-          "conditions": [
-            {
-              "keyValue": "={{ $('Busca Reuniões Vencidas sem Confirmação').item.json.id }}"
-            }
-          ]
-        },
+        "dataTableId": { "__rl": true, "value": "ZjVIaRtWSZnKQjCv", "mode": "list", "cachedResultName": "reunioes_agendadas" },
+        "filters": { "conditions": [{ "keyValue": "={{ $('Busca Reuniões Vencidas sem Confirmação').item.json.id }}" }] },
         "columns": {
           "mappingMode": "defineBelow",
-          "value": {
-            "status": "={{ $json.data === undefined ? 'sem_resposta' : ($json.data.approved ? 'imprevisto' : 'concluida') }}"
-          },
+          "value": { "status": "={{ $json.data === undefined ? 'sem_resposta' : ($json.data.approved ? 'imprevisto' : 'concluida') }}" },
           "matchingColumns": [],
           "schema": [
-            {
-              "id": "pessoa",
-              "displayName": "pessoa",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "email_pessoa",
-              "displayName": "email_pessoa",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "datetime_reuniao",
-              "displayName": "datetime_reuniao",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "assunto",
-              "displayName": "assunto",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            },
-            {
-              "id": "status",
-              "displayName": "status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "thread_id",
-              "displayName": "thread_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": true
-            }
+            { "id": "pessoa", "displayName": "pessoa", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": true },
+            { "id": "email_pessoa", "displayName": "email_pessoa", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": true },
+            { "id": "datetime_reuniao", "displayName": "datetime_reuniao", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "readOnly": false, "removed": true },
+            { "id": "assunto", "displayName": "assunto", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "thread_id", "displayName": "thread_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": true }
           ],
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
         "options": {}
-      },
-      "id": "10e2af46-8305-4d85-a341-afb379d0fba8",
-      "name": "Atualiza Status na Tabela",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1,
-      "position": [
-        1312,
-        1856
-      ]
+      }
     },
     {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "cond-foi-imprevisto-1",
-              "leftValue": "={{ $json.status }}",
-              "rightValue": "imprevisto",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
       "id": "54b34ac1-b695-4a05-be8f-9866ad006e70",
       "name": "Foi Imprevisto?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        1568,
-        1856
-      ]
+      "position": [1568, 1856],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            { "id": "cond-foi-imprevisto-1", "leftValue": "={{ $json.status }}", "rightValue": "imprevisto", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
     },
     {
+      "id": "e5829ff0-ab0a-4460-bf86-65a15a622275",
+      "name": "Registra Tentativa de Renegociação",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [2864, 1200],
       "parameters": {
-        "dataTableId": {
-          "__rl": true,
-          "value": "ZjVIaRtWSZnKQjCv",
-          "mode": "list",
-          "cachedResultName": "reunioes_agendadas"
-        },
+        "dataTableId": { "__rl": true, "value": "ZjVIaRtWSZnKQjCv", "mode": "list", "cachedResultName": "reunioes_agendadas" },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
@@ -1293,82 +693,26 @@
           },
           "matchingColumns": [],
           "schema": [
-            {
-              "id": "pessoa",
-              "displayName": "pessoa",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "email_pessoa",
-              "displayName": "email_pessoa",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "datetime_reuniao",
-              "displayName": "datetime_reuniao",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "assunto",
-              "displayName": "assunto",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "status",
-              "displayName": "status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "thread_id",
-              "displayName": "thread_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            }
+            { "id": "pessoa", "displayName": "pessoa", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "email_pessoa", "displayName": "email_pessoa", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "datetime_reuniao", "displayName": "datetime_reuniao", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "readOnly": false, "removed": false },
+            { "id": "assunto", "displayName": "assunto", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false },
+            { "id": "thread_id", "displayName": "thread_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "readOnly": false, "removed": false }
           ],
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
         "options": {}
-      },
-      "id": "e5829ff0-ab0a-4460-bf86-65a15a622275",
-      "name": "Registra Tentativa de Renegociação",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1,
-      "position": [
-        2864,
-        1200
-      ]
+      }
     },
     {
+      "id": "01e966a3-43c8-4ba8-b0c5-96607f98311d",
+      "name": "Pede Outro Horário pra Pessoa",
+      "webhookId": "f6bae400-c499-4f05-a39a-59cc4e14f9a6",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [3120, 1200],
       "parameters": {
         "operation": "reply",
         "messageId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.id }}",
@@ -1376,184 +720,101 @@
         "message": "={{ 'Oi, ' + $('Dados da Reunião Confirmados').item.json.pessoa + '! Esse horário não vai dar certo pra mim. Teria outro dia ou horário que funcione melhor pra você? Assim que confirmar, eu já ajusto por aqui.' }}",
         "options": {}
       },
-      "id": "01e966a3-43c8-4ba8-b0c5-96607f98311d",
-      "name": "Pede Outro Horário pra Pessoa",
-      "webhookId": "f6bae400-c499-4f05-a39a-59cc4e14f9a6",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.2,
-      "position": [
-        3120,
-        1200
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "resource": "thread",
-        "operation": "addLabels",
-        "threadId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}",
-        "labelIds": [
-          "Label_2763342194397371817"
-        ]
-      },
       "id": "9c41b7c0-1e95-4fb7-b4f3-24c2ffad0ffa",
       "name": "Marca Thread Aguardando Novo Horário",
       "webhookId": "53d98eaa-9c9c-47eb-9038-130bbba15d31",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
-      "position": [
-        3392,
-        1200
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "position": [3392, 1200],
+      "parameters": {
+        "resource": "thread",
+        "operation": "addLabels",
+        "threadId": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.threadId }}",
+        "labelIds": ["Label_2763342194397371817"]
+      },
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "name": "nomeUsuario",
-              "value": "Seu Nome",
-              "type": "string"
-            },
-            {
-              "name": "telegramChatId",
-              "value": "SEU_CHAT_ID_TELEGRAM",
-              "type": "string"
-            },
-            {
-              "name": "calendarEmail",
-              "value": "seu-email@gmail.com",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
       "id": "d9cff1d5-88f3-4336-b76e-c363a8c55821",
       "name": "Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        272,
-        400
-      ]
-    },
-    {
+      "position": [272, 400],
       "parameters": {
         "assignments": {
           "assignments": [
-            {
-              "name": "telegramChatId",
-              "value": "SEU_CHAT_ID_TELEGRAM",
-              "type": "string"
-            }
+            { "name": "nomeUsuario", "value": "Seu Nome", "type": "string" },
+            { "name": "telegramChatId", "value": "SEU_CHAT_ID_TELEGRAM", "type": "string" },
+            { "name": "calendarEmail", "value": "seu-email@gmail.com", "type": "string" }
           ]
         },
         "options": {}
-      },
+      }
+    },
+    {
       "id": "67a06e7a-04f9-4824-a9a5-d89ec816e7b9",
       "name": "Config (Verificador)",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        272,
-        1856
-      ]
+      "position": [272, 1856],
+      "parameters": {
+        "assignments": { "assignments": [{ "name": "telegramChatId", "value": "SEU_CHAT_ID_TELEGRAM", "type": "string" }] },
+        "options": {}
+      }
     },
     {
-      "parameters": {
-        "operation": "sendAndWait",
-        "chatId": "={{ $('Config (Verificador)').item.json.telegramChatId }}",
-        "message": "={{ 'Vou avisar ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.pessoa + ' que teve um imprevisto e perguntar se dá pra remarcar. Mensagem que vou usar:\\n\\n\"Oi, ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.pessoa + '! Ocorreu um imprevisto e não vou conseguir comparecer à reunião como combinado. Dá pra remarcar? Ou podemos adiar para outro dia?\"\\n\\nPode aprovar?' }}",
-        "approvalOptions": {
-          "values": {
-            "approvalType": "double",
-            "approveLabel": "Sim",
-            "disapproveLabel": "Não"
-          }
-        },
-        "chatApproval": true,
-        "options": {}
-      },
       "id": "1bd73d63-196e-45e3-837c-114eb8012446",
       "name": "Aprova Mensagem de Imprevisto",
       "webhookId": "7e32e7a0-dec7-402f-8a14-d24b3832f134",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [
-        1824,
-        1856
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "St8sg0OaXu600fW3",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
+      "position": [1824, 1856],
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "cond-aprovou-imprevisto-1",
-              "leftValue": "={{ $json.data.approved }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Config (Verificador)').item.json.telegramChatId }}",
+        "message": "={{ 'Vou avisar ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.pessoa + ' que teve um imprevisto e perguntar se dá pra remarcar. Mensagem que vou usar:\\n\\n\"Oi, ' + $('Busca Reuniões Vencidas sem Confirmação').item.json.pessoa + '! Ocorreu um imprevisto e não vou conseguir comparecer à reunião como combinado. Dá pra remarcar? Ou podemos adiar para outro dia?\"\\n\\nPode aprovar?' }}",
+        "approvalOptions": { "values": { "approvalType": "double", "approveLabel": "Sim", "disapproveLabel": "Não" } },
+        "chatApproval": true,
         "options": {}
       },
+      "credentials": { "telegramApi": { "id": "St8sg0OaXu600fW3", "name": "Telegram account" } }
+    },
+    {
       "id": "fc1e5e5e-3256-4b58-a35c-33a3fe2e7e37",
       "name": "Aprovou Mensagem de Imprevisto?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        2080,
-        1856
-      ]
+      "position": [2080, 1856],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            { "id": "cond-aprovou-imprevisto-1", "leftValue": "={{ $json.data.approved }}", "rightValue": "", "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
     },
     {
-      "parameters": {},
       "id": "3f3481d6-5c57-4a31-bced-518eba8b6848",
       "name": "Não Envia Aviso de Imprevisto",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [
-        2352,
-        1952
-      ]
+      "position": [2352, 1952],
+      "parameters": {}
     },
     {
+      "id": "8afa648e-71e4-4e3b-af55-f911e498697c",
+      "name": "Cria Evento na Agenda",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [2864, 976],
       "parameters": {
-        "calendar": {
-          "__rl": true,
-          "value": "={{ $('Config').item.json.calendarEmail }}",
-          "mode": "id"
-        },
+        "calendar": { "__rl": true, "value": "={{ $('Config').item.json.calendarEmail }}", "mode": "id" },
         "start": "={{ $('Dados da Reunião Confirmados').item.json.dataHoraReuniao + '-03:00' }}",
         "end": "={{ DateTime.fromISO($('Dados da Reunião Confirmados').item.json.dataHoraReuniao, { zone: 'America/Sao_Paulo' }).plus({ hours: 1 }) }}",
         "additionalFields": {
@@ -1561,210 +822,137 @@
           "summary": "={{ $('Dados da Reunião Confirmados').item.json.assunto }}"
         }
       },
-      "id": "8afa648e-71e4-4e3b-af55-f911e498697c",
-      "name": "Cria Evento na Agenda",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.3,
-      "position": [
-        2864,
-        976
-      ],
-      "credentials": {
-        "googleCalendarOAuth2Api": {
-          "id": "O8r7JcVc9Qt7MjfW",
-          "name": "Google Calendar account"
-        }
-      }
+      "credentials": { "googleCalendarOAuth2Api": { "id": "O8r7JcVc9Qt7MjfW", "name": "Google Calendar account" } }
     },
     {
+      "id": "147dd298-2735-4c6a-87e1-f2f35f365a9b",
+      "name": "Zona - Gerador de Testes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-64, 2352],
       "parameters": {
         "content": "### 🧪 Gerador de E-mails de Teste\n\nEscolha o gatilho no dropdown \"Execute workflow\" de acordo com o cenário que quer testar: não é sobre reunião, reunião com horário, ou reunião sem horário. Manda um e-mail de teste da própria caixa pra ela mesma (evita precisar de uma segunda credencial de Gmail) e o Gatilho - Novo E-mail pega normalmente.",
         "height": 788,
         "width": 1250,
         "color": 3
-      },
-      "id": "147dd298-2735-4c6a-87e1-f2f35f365a9b",
-      "name": "Zona - Gerador de Testes",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -64,
-        2352
-      ]
+      }
     },
     {
-      "parameters": {},
       "id": "c5b42f01-171c-47b4-8fc0-4bf4c90bfef6",
       "name": "Teste - Não é Sobre Reunião",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        0,
-        2512
-      ]
+      "position": [0, 2512],
+      "parameters": {}
     },
     {
-      "parameters": {},
       "id": "8a3e7b2f-2342-469f-a277-ba1d71b7dbf6",
       "name": "Teste - Reunião Com Horário",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        0,
-        2656
-      ]
+      "position": [0, 2656],
+      "parameters": {}
     },
     {
-      "parameters": {},
       "id": "d9f7613f-2343-49a7-82f3-c70d1005e3a1",
       "name": "Teste - Reunião Sem Horário",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        0,
-        2800
-      ]
+      "position": [0, 2800],
+      "parameters": {}
     },
     {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "name": "assunto",
-              "value": "Relatório mensal",
-              "type": "string"
-            },
-            {
-              "name": "corpo",
-              "value": "Oi! Segue o relatório mensal em anexo. Qualquer dúvida, me avisa por aqui.",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
       "id": "fb84eca8-cc1a-4203-aabc-e43b3119c853",
       "name": "Monta E-mail: Não é Reunião",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        304,
-        2512
-      ]
-    },
-    {
+      "position": [304, 2512],
       "parameters": {
         "assignments": {
           "assignments": [
-            {
-              "name": "assunto",
-              "value": "Alinhamento de projeto",
-              "type": "string"
-            },
-            {
-              "name": "corpo",
-              "value": "={{ 'Oi! Podemos marcar uma call pra alinhar o projeto no dia ' + $now.plus({days: 5}).toFormat('dd/MM/yyyy') + ' às 15h? Abraço.' }}",
-              "type": "string"
-            }
+            { "name": "assunto", "value": "Relatório mensal", "type": "string" },
+            { "name": "corpo", "value": "Oi! Segue o relatório mensal em anexo. Qualquer dúvida, me avisa por aqui.", "type": "string" }
           ]
         },
         "options": {}
-      },
+      }
+    },
+    {
       "id": "67826b3c-fee1-4b6d-ae57-ef27d60eefe5",
       "name": "Monta E-mail: Com Horário",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        304,
-        2656
-      ]
-    },
-    {
+      "position": [304, 2656],
       "parameters": {
         "assignments": {
           "assignments": [
-            {
-              "name": "assunto",
-              "value": "Conversa sobre o projeto",
-              "type": "string"
-            },
-            {
-              "name": "corpo",
-              "value": "Oi! Preciso muito conversar com você sobre o projeto. Você teria disponibilidade essa semana?",
-              "type": "string"
-            }
+            { "name": "assunto", "value": "Alinhamento de projeto", "type": "string" },
+            { "name": "corpo", "value": "={{ 'Oi! Podemos marcar uma call pra alinhar o projeto no dia ' + $now.plus({days: 5}).toFormat('dd/MM/yyyy') + ' às 15h? Abraço.' }}", "type": "string" }
           ]
         },
         "options": {}
-      },
+      }
+    },
+    {
       "id": "adab8144-755a-4171-8b5f-b977284f7677",
       "name": "Monta E-mail: Sem Horário",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        304,
-        2800
-      ]
+      "position": [304, 2800],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "assunto", "value": "Conversa sobre o projeto", "type": "string" },
+            { "name": "corpo", "value": "Oi! Preciso muito conversar com você sobre o projeto. Você teria disponibilidade essa semana?", "type": "string" }
+          ]
+        },
+        "options": {}
+      }
     },
     {
+      "id": "f35e4c0f-6e0a-49ab-bec5-60251ad48c40",
+      "name": "Envia E-mail de Teste",
+      "webhookId": "dba8c0e7-2792-42eb-90d5-e3b53d2fdbf4",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [608, 2656],
       "parameters": {
         "sendTo": "seu-email@gmail.com",
         "subject": "={{ $json.assunto }}",
         "message": "={{ $json.corpo }}",
         "options": {}
       },
-      "id": "f35e4c0f-6e0a-49ab-bec5-60251ad48c40",
-      "name": "Envia E-mail de Teste",
-      "webhookId": "dba8c0e7-2792-42eb-90d5-e3b53d2fdbf4",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.2,
-      "position": [
-        608,
-        2656
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {},
       "id": "93807981-730c-4729-943e-22513bf1509b",
       "name": "Teste - Responde na Thread Atual",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        0,
-        2960
-      ]
+      "position": [0, 2960],
+      "parameters": {}
     },
     {
-      "parameters": {
-        "operation": "getAll",
-        "limit": 1,
-        "filters": {
-          "q": "in:inbox to:seu-email@gmail.com"
-        }
-      },
       "id": "d43d797e-aa28-442c-be5c-15fc15a35786",
       "name": "Busca E-mail Mais Recente",
       "webhookId": "9ea68267-2b37-42eb-94d1-80882761740b",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
-      "position": [
-        304,
-        2960
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "position": [304, 2960],
+      "parameters": {
+        "operation": "getAll",
+        "limit": 1,
+        "filters": { "q": "in:inbox to:seu-email@gmail.com" }
+      },
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
+      "id": "0ba63b92-b9a7-4aee-9003-81881c8659aa",
+      "name": "Responde na Thread",
+      "webhookId": "c9d72b76-3686-41b5-b691-bbbe3985db11",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [608, 2960],
       "parameters": {
         "operation": "reply",
         "messageId": "={{ $json.id }}",
@@ -1772,670 +960,134 @@
         "message": "Pode ser quinta-feira às 14h, funciona pra você?",
         "options": {}
       },
-      "id": "0ba63b92-b9a7-4aee-9003-81881c8659aa",
-      "name": "Responde na Thread",
-      "webhookId": "c9d72b76-3686-41b5-b691-bbbe3985db11",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.2,
-      "position": [
-        608,
-        2960
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "ctS958nMwCd0wdy1",
-          "name": "Gmail account 2"
-        }
-      }
+      "credentials": { "gmailOAuth2": { "id": "ctS958nMwCd0wdy1", "name": "Gmail account 2" } }
     },
     {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "sub-fluxo-messageid",
-              "name": "messageId",
-              "value": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.id }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
       "id": "046c616a-b4a7-4e28-b85a-b24b1e6757d9",
       "name": "Monta Dados pro Sub-fluxo de E-mail",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
-      "position": [
-        1312,
-        624
-      ]
+      "position": [1312, 624],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "sub-fluxo-messageid", "name": "messageId", "value": "={{ $('Gatilho - Novo E-mail (Reunião)').item.json.id }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      }
     },
     {
-      "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "value": "bkaD2qTCaC4EeyK0",
-          "mode": "id"
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "options": {
-          "waitForSubWorkflow": false
-        }
-      },
       "id": "9302eff7-19e9-4c1a-aab1-19d5c5b36281",
       "name": "Executa Sub-fluxo de Automação de E-mail",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
-      "position": [
-        1568,
-        624
-      ]
+      "position": [1568, 624],
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "EYNoikHSL7GtyxAh", "mode": "id" },
+        "workflowInputs": { "mappingMode": "defineBelow", "value": {}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": false, "convertFieldsToString": true },
+        "options": { "waitForSubWorkflow": false }
+      }
+    },
+    {
+      "id": "if-horario-extraido-1",
+      "name": "Horário Foi Extraído?",
+      "notes": "Sim: segue pra consultar a agenda. Não: a IA não conseguiu confirmar um horário na resposta, avisa manualmente em vez de estourar na Calendar API.",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1952, 1072],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            { "id": "check-horario-extraido", "leftValue": "={{ $json.dataHoraReuniao }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "telegram-avisa-falha-horario-1",
+      "name": "Avisa Falha na Extração de Horário",
+      "webhookId": "20bf4e55-1265-445d-9774-97455d052e11",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1952, 1280],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Config').item.json.telegramChatId }}",
+        "text": "={{ '⚠️ Não consegui confirmar um horário certo na resposta de ' + $json.pessoa + ' (' + $json.emailPessoa + ') sobre \"' + $json.assunto + '\". Precisa checar a thread manualmente e agendar à mão se for o caso.' }}",
+        "options": {}
+      },
+      "credentials": { "telegramApi": { "id": "St8sg0OaXu600fW3", "name": "Telegram account" } }
+    },
+    {
+      "id": "7d892463-2199-460c-96d8-2ad41c8f895b",
+      "name": "Backlog - Ideias e Decisoes Pendentes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2928, 1536],
+      "parameters": {
+        "content": "## Backlog - ideias e decisoes pendentes\n\n- **Excluir evento do Google Calendar?** Quando o usuario confirma presenca (sem imprevisto) no Verificador, hoje o evento fica no calendario pra sempre (nao existe delete node). Decidir: apagar automaticamente, ou manter como historico?\n\n- **BUG CONFIRMADO (17/09): 2 e-mails quase juntos, so 1 e processado.** Testado 3x seguidas ao longo de 7min: mandei 2 e-mails de teste com 7s de diferenca, o Gatilho so pegou o mais novo. O mais antigo nunca apareceu, mesmo rodando o gatilho de novo varias vezes. Hipotese: o Gmail Trigger pega so a mensagem nao-lida mais recente por checagem, entao o mais antigo fica enterrado atras de qualquer coisa mais nova (inclusive respostas automaticas do proprio fluxo). Threads de teste: 1a0afeef4bd2181b (nunca processado) e 1a0afef113030b15 (processado). Decidido em 17/09: nao mexer por enquanto. Se resolver depois, duas opcoes: (1) gatilho de varredura extra tipo o Verificador, pra pegar e-mails presos; (2) trocar a logica de nao-lido por controle proprio numa Data Table.\n",
+        "height": 460,
+        "width": 500,
+        "color": 7
+      }
     }
   ],
   "connections": {
-    "Agente - Detecta Pedido de Reunião": {
-      "main": [
-        [
-          {
-            "node": "É Sobre Reunião?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "É Sobre Reunião?": {
-      "main": [
-        [
-          {
-            "node": "Tem Horário Definido?",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Monta Dados pro Sub-fluxo de E-mail",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Usuário Aceitou a Reunião?": {
-      "main": [
-        [
-          {
-            "node": "Cria Evento na Agenda",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Registra Tentativa de Renegociação",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Modelo de IA (OpenRouter)": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente - Detecta Pedido de Reunião",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "Formata Saída da IA",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Formata Saída da IA": {
-      "ai_outputParser": [
-        [
-          {
-            "node": "Agente - Detecta Pedido de Reunião",
-            "type": "ai_outputParser",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Monta Confirmação pra Pessoa (Rascunho)": {
-      "main": [
-        [
-          {
-            "node": "Envia Confirmação pra Pessoa",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Envia Confirmação pra Pessoa": {
-      "main": [
-        [
-          {
-            "node": "Registra Reunião na Tabela",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Busca Mensagens da Thread (Horário)": {
-      "main": [
-        [
-          {
-            "node": "Agente - Escreve Pergunta de Horário",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenRouter Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente - Escreve Pergunta de Horário",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Formata Pergunta de Horário": {
-      "ai_outputParser": [
-        [
-          {
-            "node": "Agente - Escreve Pergunta de Horário",
-            "type": "ai_outputParser",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenRouter Chat Model1": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Formata Pergunta de Horário",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Usuário Aprovou a Pergunta de Horário?": {
-      "main": [
-        [
-          {
-            "node": "Envia Pergunta de Horário pra Pessoa",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Guarda Tentativa Anterior de Horário",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Guarda Tentativa Anterior de Horário": {
-      "main": [
-        [
-          {
-            "node": "Agente - Escreve Pergunta de Horário",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Consulta Agenda do Usuário": {
-      "main": [
-        [
-          {
-            "node": "Notifica Usuário e Aguarda Decisão",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notifica Usuário e Aguarda Decisão": {
-      "main": [
-        [
-          {
-            "node": "Usuário Aceitou a Reunião?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente - Escreve Pergunta de Horário": {
-      "main": [
-        [
-          {
-            "node": "Notifica Usuário e Aguarda Aprovação (Horário)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notifica Usuário e Aguarda Aprovação (Horário)": {
-      "main": [
-        [
-          {
-            "node": "Usuário Aprovou a Pergunta de Horário?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Busca Thread pra Checar Label": {
-      "main": [
-        [
-          {
-            "node": "Thread Tem Label Horário Pendente?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Thread Tem Label Horário Pendente?": {
-      "main": [
-        [
-          {
-            "node": "Agente - Extrai Resposta de Horário",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Agente - Detecta Pedido de Reunião",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenRouter Chat Model2": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Agente - Extrai Resposta de Horário",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "Formata Extração de Horário",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Formata Extração de Horário": {
-      "ai_outputParser": [
-        [
-          {
-            "node": "Agente - Extrai Resposta de Horário",
-            "type": "ai_outputParser",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agente - Extrai Resposta de Horário": {
-      "main": [
-        [
-          {
-            "node": "Remove Label Horário Pendente",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Remove Label Horário Pendente": {
-      "main": [
-        [
-          {
-            "node": "Dados da Reunião Confirmados",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Tem Horário Definido?": {
-      "main": [
-        [
-          {
-            "node": "Dados da Reunião Confirmados",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Aplica Label Horário Pendente",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Dados da Reunião Confirmados": {
-      "main": [
-        [
-          {
-            "node": "Consulta Agenda do Usuário",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Aplica Label Horário Pendente": {
-      "main": [
-        [
-          {
-            "node": "Busca Mensagens da Thread (Horário)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Busca Reuniões Vencidas sem Confirmação": {
-      "main": [
-        [
-          {
-            "node": "Marca Aguardando Resposta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Marca Aguardando Resposta": {
-      "main": [
-        [
-          {
-            "node": "Pergunta se Usuário Compareceu",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Pergunta se Usuário Compareceu": {
-      "main": [
-        [
-          {
-            "node": "Atualiza Status na Tabela",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Atualiza Status na Tabela": {
-      "main": [
-        [
-          {
-            "node": "Foi Imprevisto?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Registra Tentativa de Renegociação": {
-      "main": [
-        [
-          {
-            "node": "Pede Outro Horário pra Pessoa",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Pede Outro Horário pra Pessoa": {
-      "main": [
-        [
-          {
-            "node": "Marca Thread Aguardando Novo Horário",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gatilho - Novo E-mail (Reunião)": {
-      "main": [
-        [
-          {
-            "node": "Config",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Config": {
-      "main": [
-        [
-          {
-            "node": "Busca Thread pra Checar Label",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gatilho - Verifica Reuniões": {
-      "main": [
-        [
-          {
-            "node": "Config (Verificador)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Config (Verificador)": {
-      "main": [
-        [
-          {
-            "node": "Busca Reuniões Vencidas sem Confirmação",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Foi Imprevisto?": {
-      "main": [
-        [
-          {
-            "node": "Aprova Mensagem de Imprevisto",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Aprova Mensagem de Imprevisto": {
-      "main": [
-        [
-          {
-            "node": "Aprovou Mensagem de Imprevisto?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Aprovou Mensagem de Imprevisto?": {
-      "main": [
-        [
-          {
-            "node": "Avisa Imprevisto pra Outra Pessoa (Rascunho)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Não Envia Aviso de Imprevisto",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Cria Evento na Agenda": {
-      "main": [
-        [
-          {
-            "node": "Monta Confirmação pra Pessoa (Rascunho)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Teste - Não é Sobre Reunião": {
-      "main": [
-        [
-          {
-            "node": "Monta E-mail: Não é Reunião",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Teste - Reunião Com Horário": {
-      "main": [
-        [
-          {
-            "node": "Monta E-mail: Com Horário",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Teste - Reunião Sem Horário": {
-      "main": [
-        [
-          {
-            "node": "Monta E-mail: Sem Horário",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Monta E-mail: Não é Reunião": {
-      "main": [
-        [
-          {
-            "node": "Envia E-mail de Teste",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Monta E-mail: Com Horário": {
-      "main": [
-        [
-          {
-            "node": "Envia E-mail de Teste",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Monta E-mail: Sem Horário": {
-      "main": [
-        [
-          {
-            "node": "Envia E-mail de Teste",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Teste - Responde na Thread Atual": {
-      "main": [
-        [
-          {
-            "node": "Busca E-mail Mais Recente",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Busca E-mail Mais Recente": {
-      "main": [
-        [
-          {
-            "node": "Responde na Thread",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Monta Dados pro Sub-fluxo de E-mail": {
-      "main": [
-        [
-          {
-            "node": "Executa Sub-fluxo de Automação de E-mail",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
+    "Agente - Detecta Pedido de Reunião": { "main": [[{ "node": "É Sobre Reunião?", "type": "main", "index": 0 }]] },
+    "É Sobre Reunião?": { "main": [[{ "node": "Tem Horário Definido?", "type": "main", "index": 0 }], [{ "node": "Monta Dados pro Sub-fluxo de E-mail", "type": "main", "index": 0 }]] },
+    "Usuário Aceitou a Reunião?": { "main": [[{ "node": "Cria Evento na Agenda", "type": "main", "index": 0 }], [{ "node": "Registra Tentativa de Renegociação", "type": "main", "index": 0 }]] },
+    "Modelo de IA (OpenRouter)": { "ai_languageModel": [[{ "node": "Agente - Detecta Pedido de Reunião", "type": "ai_languageModel", "index": 0 }, { "node": "Formata Saída da IA", "type": "ai_languageModel", "index": 0 }]] },
+    "Formata Saída da IA": { "ai_outputParser": [[{ "node": "Agente - Detecta Pedido de Reunião", "type": "ai_outputParser", "index": 0 }]] },
+    "Monta Confirmação pra Pessoa (Rascunho)": { "main": [[{ "node": "Envia Confirmação pra Pessoa", "type": "main", "index": 0 }]] },
+    "Envia Confirmação pra Pessoa": { "main": [[{ "node": "Registra Reunião na Tabela", "type": "main", "index": 0 }]] },
+    "Busca Mensagens da Thread (Horário)": { "main": [[{ "node": "Agente - Escreve Pergunta de Horário", "type": "main", "index": 0 }]] },
+    "OpenRouter Chat Model": { "ai_languageModel": [[{ "node": "Agente - Escreve Pergunta de Horário", "type": "ai_languageModel", "index": 0 }]] },
+    "Formata Pergunta de Horário": { "ai_outputParser": [[{ "node": "Agente - Escreve Pergunta de Horário", "type": "ai_outputParser", "index": 0 }]] },
+    "OpenRouter Chat Model1": { "ai_languageModel": [[{ "node": "Formata Pergunta de Horário", "type": "ai_languageModel", "index": 0 }]] },
+    "Usuário Aprovou a Pergunta de Horário?": { "main": [[{ "node": "Envia Pergunta de Horário pra Pessoa", "type": "main", "index": 0 }], [{ "node": "Guarda Tentativa Anterior de Horário", "type": "main", "index": 0 }]] },
+    "Guarda Tentativa Anterior de Horário": { "main": [[{ "node": "Agente - Escreve Pergunta de Horário", "type": "main", "index": 0 }]] },
+    "Consulta Agenda do Usuário": { "main": [[{ "node": "Notifica Usuário e Aguarda Decisão", "type": "main", "index": 0 }]] },
+    "Notifica Usuário e Aguarda Decisão": { "main": [[{ "node": "Usuário Aceitou a Reunião?", "type": "main", "index": 0 }]] },
+    "Agente - Escreve Pergunta de Horário": { "main": [[{ "node": "Notifica Usuário e Aguarda Aprovação (Horário)", "type": "main", "index": 0 }]] },
+    "Notifica Usuário e Aguarda Aprovação (Horário)": { "main": [[{ "node": "Usuário Aprovou a Pergunta de Horário?", "type": "main", "index": 0 }]] },
+    "Busca Thread pra Checar Label": { "main": [[{ "node": "Thread Tem Label Horário Pendente?", "type": "main", "index": 0 }]] },
+    "Thread Tem Label Horário Pendente?": { "main": [[{ "node": "Agente - Extrai Resposta de Horário", "type": "main", "index": 0 }], [{ "node": "Agente - Detecta Pedido de Reunião", "type": "main", "index": 0 }]] },
+    "OpenRouter Chat Model2": { "ai_languageModel": [[{ "node": "Agente - Extrai Resposta de Horário", "type": "ai_languageModel", "index": 0 }, { "node": "Formata Extração de Horário", "type": "ai_languageModel", "index": 0 }]] },
+    "Formata Extração de Horário": { "ai_outputParser": [[{ "node": "Agente - Extrai Resposta de Horário", "type": "ai_outputParser", "index": 0 }]] },
+    "Agente - Extrai Resposta de Horário": { "main": [[{ "node": "Remove Label Horário Pendente", "type": "main", "index": 0 }]] },
+    "Remove Label Horário Pendente": { "main": [[{ "node": "Dados da Reunião Confirmados", "type": "main", "index": 0 }]] },
+    "Tem Horário Definido?": { "main": [[{ "node": "Dados da Reunião Confirmados", "type": "main", "index": 0 }], [{ "node": "Aplica Label Horário Pendente", "type": "main", "index": 0 }]] },
+    "Dados da Reunião Confirmados": { "main": [[{ "node": "Horário Foi Extraído?", "type": "main", "index": 0 }]] },
+    "Aplica Label Horário Pendente": { "main": [[{ "node": "Busca Mensagens da Thread (Horário)", "type": "main", "index": 0 }]] },
+    "Busca Reuniões Vencidas sem Confirmação": { "main": [[{ "node": "Marca Aguardando Resposta", "type": "main", "index": 0 }]] },
+    "Marca Aguardando Resposta": { "main": [[{ "node": "Pergunta se Usuário Compareceu", "type": "main", "index": 0 }]] },
+    "Pergunta se Usuário Compareceu": { "main": [[{ "node": "Atualiza Status na Tabela", "type": "main", "index": 0 }]] },
+    "Atualiza Status na Tabela": { "main": [[{ "node": "Foi Imprevisto?", "type": "main", "index": 0 }]] },
+    "Registra Tentativa de Renegociação": { "main": [[{ "node": "Pede Outro Horário pra Pessoa", "type": "main", "index": 0 }]] },
+    "Pede Outro Horário pra Pessoa": { "main": [[{ "node": "Marca Thread Aguardando Novo Horário", "type": "main", "index": 0 }]] },
+    "Gatilho - Novo E-mail (Reunião)": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
+    "Config": { "main": [[{ "node": "Busca Thread pra Checar Label", "type": "main", "index": 0 }]] },
+    "Gatilho - Verifica Reuniões": { "main": [[{ "node": "Config (Verificador)", "type": "main", "index": 0 }]] },
+    "Config (Verificador)": { "main": [[{ "node": "Busca Reuniões Vencidas sem Confirmação", "type": "main", "index": 0 }]] },
+    "Foi Imprevisto?": { "main": [[{ "node": "Aprova Mensagem de Imprevisto", "type": "main", "index": 0 }]] },
+    "Aprova Mensagem de Imprevisto": { "main": [[{ "node": "Aprovou Mensagem de Imprevisto?", "type": "main", "index": 0 }]] },
+    "Aprovou Mensagem de Imprevisto?": { "main": [[{ "node": "Avisa Imprevisto pra Outra Pessoa (Rascunho)", "type": "main", "index": 0 }], [{ "node": "Não Envia Aviso de Imprevisto", "type": "main", "index": 0 }]] },
+    "Cria Evento na Agenda": { "main": [[{ "node": "Monta Confirmação pra Pessoa (Rascunho)", "type": "main", "index": 0 }]] },
+    "Teste - Não é Sobre Reunião": { "main": [[{ "node": "Monta E-mail: Não é Reunião", "type": "main", "index": 0 }]] },
+    "Teste - Reunião Com Horário": { "main": [[{ "node": "Monta E-mail: Com Horário", "type": "main", "index": 0 }]] },
+    "Teste - Reunião Sem Horário": { "main": [[{ "node": "Monta E-mail: Sem Horário", "type": "main", "index": 0 }]] },
+    "Monta E-mail: Não é Reunião": { "main": [[{ "node": "Envia E-mail de Teste", "type": "main", "index": 0 }]] },
+    "Monta E-mail: Com Horário": { "main": [[{ "node": "Envia E-mail de Teste", "type": "main", "index": 0 }]] },
+    "Monta E-mail: Sem Horário": { "main": [[{ "node": "Envia E-mail de Teste", "type": "main", "index": 0 }]] },
+    "Teste - Responde na Thread Atual": { "main": [[{ "node": "Busca E-mail Mais Recente", "type": "main", "index": 0 }]] },
+    "Busca E-mail Mais Recente": { "main": [[{ "node": "Responde na Thread", "type": "main", "index": 0 }]] },
+    "Monta Dados pro Sub-fluxo de E-mail": { "main": [[{ "node": "Executa Sub-fluxo de Automação de E-mail", "type": "main", "index": 0 }]] },
+    "Horário Foi Extraído?": { "main": [[{ "node": "Consulta Agenda do Usuário", "type": "main", "index": 0 }], [{ "node": "Avisa Falha na Extração de Horário", "type": "main", "index": 0 }]] }
   },
-  "settings": {
-    "executionOrder": "v1",
-    "binaryMode": "separate"
-  },
+  "settings": { "executionOrder": "v1" },
   "pinData": {}
 }

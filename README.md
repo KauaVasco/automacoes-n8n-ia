@@ -18,7 +18,7 @@ Ou seja: a automação de e-mails deixou de ser standalone e virou uma peça de 
 
 ### Agendamento de Reuniões (`agendamento-reunioes.json`)
 
-E-mail novo chega → uma IA decide se é pedido de reunião → se tiver horário definido, consulta a agenda e pede aprovação no Telegram; se não tiver, uma IA escreve a pergunta de horário (com aprovação antes de enviar) e espera a resposta na mesma thread. Aprovado, cria o evento no Google Calendar e confirma por e-mail. Um segundo gatilho, rodando a cada 5 minutos, verifica reuniões já vencidas sem confirmação e avisa a outra pessoa se houve imprevisto.
+E-mail novo chega → uma IA decide se é pedido de reunião → se tiver horário definido, consulta a agenda e pede aprovação no Telegram; se não tiver, uma IA escreve a pergunta de horário (com aprovação antes de enviar) e espera a resposta na mesma thread. Se a resposta não deixar um dia e horário claros, o fluxo avisa no Telegram em vez de tentar marcar algo errado na agenda. Aprovado, cria o evento no Google Calendar e confirma por e-mail; recusado, pede outro horário pra pessoa e volta a aguardar resposta na mesma thread (renegociação). Um segundo gatilho, rodando a cada 5 minutos, verifica reuniões já vencidas sem confirmação e avisa a outra pessoa se houve imprevisto.
 
 ### Automação de E-mails (`automacao-emails.json`)
 
