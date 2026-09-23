@@ -77,7 +77,7 @@
       "id": "315857b7-7936-47ac-b689-df12a6d2b073",
       "name": "Usuário Aceitou a Reunião?",
       "notesInFlow": true,
-      "notes": "Sim: monta confirmação pra pessoa. Não: encerra sem marcar.",
+      "notes": "Sim: monta confirmação pra pessoa e cria o evento na agenda. Não: registra a tentativa recusada e pede outro horário pra pessoa (renegociação), voltando a aguardar resposta na mesma thread.",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [2608, 1072],
