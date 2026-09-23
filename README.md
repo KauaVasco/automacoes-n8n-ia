@@ -18,7 +18,7 @@ Ou seja: a automação de e-mails deixou de ser standalone e virou uma peça de 
 
 ### Agendamento de Reuniões (`agendamento-reunioes.json`)
 
-E-mail novo chega → uma IA decide se é pedido de reunião → se tiver horário definido, consulta a agenda e pede aprovação no Telegram; se não tiver, uma IA escreve a pergunta de horário (com aprovação antes de enviar) e espera a resposta na mesma thread. Aprovado, cria o evento no Google Calendar e confirma por e-mail. Um segundo gatilho, rodando a cada 5 minutos, verifica reuniões já vencidas sem confirmação e avisa a outra pessoa se houve imprevisto.
+E-mail novo chega → uma IA decide se é pedido de reunião → se tiver horário definido, consulta a agenda e pede aprovação no Telegram; se não tiver, uma IA escreve a pergunta de horário (com aprovação antes de enviar) e espera a resposta na mesma thread. Se a resposta não deixar um dia e horário claros, o fluxo avisa no Telegram em vez de tentar marcar algo errado na agenda. Aprovado, cria o evento no Google Calendar e confirma por e-mail; recusado, pede outro horário pra pessoa e volta a aguardar resposta na mesma thread (renegociação). Um segundo gatilho, rodando a cada 5 minutos, verifica reuniões já vencidas sem confirmação e avisa a outra pessoa se houve imprevisto.
 
 ### Automação de E-mails (`automacao-emails.json`)
 
@@ -50,7 +50,7 @@ Essa instância roda em `localhost:5678` via Docker, num único container, sem d
 |---|---|---|
 | Banco de dados | SQLite (arquivo local) | PostgreSQL — SQLite trava o arquivo inteiro a cada escrita; com webhooks simultâneos, execuções concorrentes começam a falhar |
 | `N8N_ENCRYPTION_KEY` | gerada automaticamente pelo n8n na primeira vez, guardada só localmente | definida explicitamente (`openssl rand -hex 32`) e **backupeada separado do banco** — perdendo essa chave, toda credencial salva fica ilegível pra sempre, mesmo com o banco intacto |
-| URL pública / `WEBHOOK_URL` | túnel Cloudflare temporário (Quick Tunnel), URL muda a cada reinício | domínio real fixo configurado em `N8N_HOST` / `WEBHOOK_URL` |
+| URL pública / `WEBHOOK_URL` | túnel ngrok com domínio reservado (plano free, `*.ngrok-free.dev`), URL fixa entre reinícios — mas depende do processo do ngrok ficar de pé | domínio real fixo configurado em `N8N_HOST` / `WEBHOOK_URL` |
 | HTTPS / reverse proxy | túnel cuida do TLS, sem proxy próprio | Nginx ou Caddy na frente, terminando TLS na porta 443; só 80/443 expostos publicamente, container isolado numa rede interna |
 | Autenticação | login padrão do n8n (e-mail + senha) | o mesmo login é o mínimo aceitável; instância exposta à internet geralmente soma SSO na frente (Authelia/Authentik) e rate limit no proxy |
 | Execução | um container único, sem fila | modo fila (Redis + workers separados) quando o volume de execuções cresce |
