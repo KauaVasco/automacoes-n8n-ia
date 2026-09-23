@@ -50,7 +50,7 @@ Essa instância roda em `localhost:5678` via Docker, num único container, sem d
 |---|---|---|
 | Banco de dados | SQLite (arquivo local) | PostgreSQL — SQLite trava o arquivo inteiro a cada escrita; com webhooks simultâneos, execuções concorrentes começam a falhar |
 | `N8N_ENCRYPTION_KEY` | gerada automaticamente pelo n8n na primeira vez, guardada só localmente | definida explicitamente (`openssl rand -hex 32`) e **backupeada separado do banco** — perdendo essa chave, toda credencial salva fica ilegível pra sempre, mesmo com o banco intacto |
-| URL pública / `WEBHOOK_URL` | túnel Cloudflare temporário (Quick Tunnel), URL muda a cada reinício | domínio real fixo configurado em `N8N_HOST` / `WEBHOOK_URL` |
+| URL pública / `WEBHOOK_URL` | túnel ngrok com domínio reservado (plano free, `*.ngrok-free.dev`), URL fixa entre reinícios — mas depende do processo do ngrok ficar de pé | domínio real fixo configurado em `N8N_HOST` / `WEBHOOK_URL` |
 | HTTPS / reverse proxy | túnel cuida do TLS, sem proxy próprio | Nginx ou Caddy na frente, terminando TLS na porta 443; só 80/443 expostos publicamente, container isolado numa rede interna |
 | Autenticação | login padrão do n8n (e-mail + senha) | o mesmo login é o mínimo aceitável; instância exposta à internet geralmente soma SSO na frente (Authelia/Authentik) e rate limit no proxy |
 | Execução | um container único, sem fila | modo fila (Redis + workers separados) quando o volume de execuções cresce |
