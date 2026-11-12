@@ -42,22 +42,6 @@ Cada workflow tem um node **`Config`** logo no início (Set node), com os campos
 6. **Crie a Data Table `reunioes_agendadas`** (usada pra guardar o estado das reuniões) com as colunas: `pessoa`, `email_pessoa`, `datetime_reuniao`, `assunto`, `status`, `thread_id` — os tipos e nomes exatos estão na nota do node `Registra Reunião na Tabela`. Depois, reconecte o node dessa tabela (e os outros 3 que a usam) pra apontar pra ela.
 7. Ative os dois workflows.
 
-## Se fosse rodar fora do localhost
-
-Essa instância roda em `localhost:5678` via Docker, num único container, sem domínio público. Funciona bem pra desenvolver e testar, mas é uma configuração de desenvolvimento — não de produção. Comparando com o que instâncias n8n de produção normalmente têm ([fontes no fim](#fontes)):
-
-| Item | Aqui (localhost) | Numa instância pública/produção |
-|---|---|---|
-| Banco de dados | SQLite (arquivo local) | PostgreSQL — SQLite trava o arquivo inteiro a cada escrita; com webhooks simultâneos, execuções concorrentes começam a falhar |
-| `N8N_ENCRYPTION_KEY` | gerada automaticamente pelo n8n na primeira vez, guardada só localmente | definida explicitamente (`openssl rand -hex 32`) e **backupeada separado do banco** — perdendo essa chave, toda credencial salva fica ilegível pra sempre, mesmo com o banco intacto |
-| URL pública / `WEBHOOK_URL` | túnel ngrok com domínio reservado (plano free, `*.ngrok-free.dev`), URL fixa entre reinícios — mas depende do processo do ngrok ficar de pé | domínio real fixo configurado em `N8N_HOST` / `WEBHOOK_URL` |
-| HTTPS / reverse proxy | túnel cuida do TLS, sem proxy próprio | Nginx ou Caddy na frente, terminando TLS na porta 443; só 80/443 expostos publicamente, container isolado numa rede interna |
-| Autenticação | login padrão do n8n (e-mail + senha) | o mesmo login é o mínimo aceitável; instância exposta à internet geralmente soma SSO na frente (Authelia/Authentik) e rate limit no proxy |
-| Execução | um container único, sem fila | modo fila (Redis + workers separados) quando o volume de execuções cresce |
-| Recursos | o que a máquina local tiver | mínimo documentado de 2 GB de RAM, 4 GB pra não sentir pressão de swap em produção, disco SSD |
-
-Nada disso muda a lógica dos workflows em si — só o jeito como a instância de n8n por trás deles é hospedada.
-
 ## Aviso
 
 Estes workflows foram feitos e testados ponta a ponta em ambiente real (Gmail + Telegram + Google Calendar + OpenRouter + Gemini). Compartilhados como referência/portfólio — ajuste os prompts e regras de negócio pro seu caso de uso antes de usar em produção.
