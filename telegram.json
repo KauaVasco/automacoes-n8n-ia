@@ -1,0 +1,1955 @@
+{
+  "name": "Assistente de E-mails - Telegram",
+  "nodes": [
+    {
+      "id": "f3000001-0000-4000-8000-000000000001",
+      "name": "Banner Geral",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -520
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 3400,
+        "height": 420,
+        "content": "## Assistente de e-mails: Telegram\n\nTerceira peça do assistente. Escuta o seu chat do Telegram e trata duas coisas: o toque nos botões Sim e Não da mensagem de aprovação e o texto que você digita depois do Não.\n\n**Como funciona**\n- Sim: envia a resposta na mesma thread, só ao remetente. Com modoSimulacao ligado no Config, não envia nada e registra como simulado.\n- Não: o bot pergunta como você quer a resposta. O que você digitar no chat vira instrução, o modelo reescreve com todas as instruções acumuladas e manda uma nova mensagem com os botões. Digitar ignorar descarta o e-mail.\n- Ao chegar em maxTentativas instruções sem aprovação, o e-mail fica pendente e o bot avisa.\n\n**Por que é assim**\n- O estado de cada e-mail fica na tabela aprovacoes. Nada fica esperando dentro do n8n, e uma reinicialização não perde pedidos.\n- Só mensagens do seu chat são aceitas. O texto digitado vale para o e-mail que está esperando instrução há menos tempo.\n- O bot do Telegram só pode ter um webhook. Este gatilho é o dono dele, então os botões vêm daqui e não do recurso de aprovação no chat do nó do Telegram.\n\nÚltima mudança: 23/11/2026, fluxo criado, ainda inativo."
+      }
+    },
+    {
+      "id": "f3000002-0000-4000-8000-000000000002",
+      "name": "Zona - Entrada",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        120
+      ],
+      "parameters": {
+        "color": 4,
+        "width": 1100,
+        "height": 360,
+        "content": "### Entrada\n\nRecebe tudo que chega no bot, só do seu chat. Separa toque em botão de texto digitado."
+      }
+    },
+    {
+      "id": "f3000003-0000-4000-8000-000000000003",
+      "name": "Zona - Botões",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        120
+      ],
+      "parameters": {
+        "color": 6,
+        "width": 2300,
+        "height": 900,
+        "content": "### Toque em Sim ou Não\n\nConfirma o toque, lê a pendência na tabela, ignora toque repetido e envia (ou simula) a resposta, ou pede a instrução."
+      }
+    },
+    {
+      "id": "f3000004-0000-4000-8000-000000000004",
+      "name": "Zona - Texto",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        1060
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 2300,
+        "height": 1100,
+        "content": "### Texto digitado\n\nAchou o e-mail que espera instrução, trata ignorar, conta a tentativa e chama a Redação de novo, ou fecha como pendente no limite."
+      }
+    },
+    {
+      "id": "f3000010-0000-4000-8000-000000000010",
+      "name": "Gatilho Telegram",
+      "notes": "Recebe mensagens e toques em botão, só do chat configurado. Ao ativar o fluxo, o n8n registra o webhook do bot no endereço público.",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {
+          "chatIds": "SEU_CHAT_ID_TELEGRAM"
+        }
+      }
+    },
+    {
+      "id": "f3000011-0000-4000-8000-000000000011",
+      "name": "Config",
+      "notes": "Único lugar para editar. modoSimulacao: true não envia nada. maxTentativas: quantas instruções por e-mail antes de ficar pendente.",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        280,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f3000011-0001-4000-8000-000000000001",
+              "name": "telegramChatId",
+              "value": "SEU_CHAT_ID_TELEGRAM",
+              "type": "string"
+            },
+            {
+              "id": "f3000011-0002-4000-8000-000000000002",
+              "name": "modoSimulacao",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "f3000011-0003-4000-8000-000000000003",
+              "name": "maxTentativas",
+              "value": 5,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000012-0000-4000-8000-000000000012",
+      "name": "É Botão?",
+      "notes": "Sim: toque em botão Sim ou Não. Não: texto digitado.",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        560,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3000012-0001-4000-8000-000000000001",
+              "leftValue": "={{ !!$json.callback_query }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000020-0000-4000-8000-000000000020",
+      "name": "Lê Botão",
+      "notes": "O botão carrega 'sim:' ou 'nao:' mais o id do e-mail. Separa a ação do id e guarda o id do toque.",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1080,
+        200
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f3000020-0001-4000-8000-000000000001",
+              "name": "acao",
+              "value": "={{ $json.callback_query.data.split(':')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "f3000020-0002-4000-8000-000000000002",
+              "name": "emailId",
+              "value": "={{ $json.callback_query.data.split(':')[1] }}",
+              "type": "string"
+            },
+            {
+              "id": "f3000020-0003-4000-8000-000000000003",
+              "name": "queryId",
+              "value": "={{ $json.callback_query.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000021-0000-4000-8000-000000000021",
+      "name": "Confirma Toque",
+      "notes": "Responde ao toque para o Telegram parar de mostrar o botão carregando.",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        100
+      ],
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.queryId }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "f3000022-0000-4000-8000-000000000022",
+      "name": "Busca Pendência",
+      "notes": "Lê a pendência do e-mail do botão na tabela aprovacoes.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        300
+      ],
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "aprovacoes"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email_id",
+              "keyValue": "={{ $json.emailId }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f3000023-0000-4000-8000-000000000023",
+      "name": "Ainda Aguarda Aprovação?",
+      "notes": "Evita tratar o mesmo e-mail duas vezes se você tocar em um botão antigo ou repetido.",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1640,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3000023-0001-4000-8000-000000000001",
+              "leftValue": "={{ $json.estado === 'aguardando_aprovacao' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000024-0000-4000-8000-000000000024",
+      "name": "Avisa Já Tratado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1920,
+        520
+      ],
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegramChatId }}",
+        "text": "Esse pedido já foi tratado.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "f3000025-0000-4000-8000-000000000025",
+      "name": "É Sim?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3000025-0001-4000-8000-000000000001",
+              "leftValue": "={{ $('Lê Botão').first().json.acao === 'sim' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000026-0000-4000-8000-000000000026",
+      "name": "Modo Simulação?",
+      "notes": "Ligado no Config: não envia nada e registra como simulado.",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2200,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3000026-0001-4000-8000-000000000001",
+              "leftValue": "={{ $('Config').first().json.modoSimulacao }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000027-0000-4000-8000-000000000027",
+      "name": "Registra Simulado",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2480,
+        100
+      ],
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "emails_processados"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Busca Pendência').first().json.email_id }}",
+            "thread_id": "={{ $('Busca Pendência').first().json.thread_id }}",
+            "remetente": "={{ $('Busca Pendência').first().json.remetente }}",
+            "assunto": "={{ $('Busca Pendência').first().json.assunto }}",
+            "decisao": "simulado",
+            "motivo": "modo simulação ligado",
+            "tentativas": "={{ $('Busca Pendência').first().json.tentativa }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "remetente",
+              "displayName": "remetente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "decisao",
+              "displayName": "decisao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tentativas",
+              "displayName": "tentativas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000028-0000-4000-8000-000000000028",
+      "name": "Envia Resposta na Thread",
+      "notes": "Responde na mesma conversa, só ao remetente, com exatamente o texto aprovado. Texto simples, sem HTML e sem a assinatura do n8n.",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2480,
+        300
+      ],
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Busca Pendência').first().json.email_id }}",
+        "emailType": "text",
+        "message": "={{ $('Busca Pendência').first().json.corpo }}",
+        "options": {
+          "replyToSenderOnly": true,
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "f3000029-0000-4000-8000-000000000029",
+      "name": "Registra Enviado",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2760,
+        300
+      ],
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "emails_processados"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Busca Pendência').first().json.email_id }}",
+            "thread_id": "={{ $('Busca Pendência').first().json.thread_id }}",
+            "remetente": "={{ $('Busca Pendência').first().json.remetente }}",
+            "assunto": "={{ $('Busca Pendência').first().json.assunto }}",
+            "decisao": "enviado",
+            "motivo": "",
+            "tentativas": "={{ $('Busca Pendência').first().json.tentativa }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "remetente",
+              "displayName": "remetente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "decisao",
+              "displayName": "decisao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tentativas",
+              "displayName": "tentativas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f300002a-0000-4000-8000-00000000002a",
+      "name": "Marca Finalizado",
+      "notes": "Fecha a pendência (estado finalizado). Um novo toque no mesmo botão cai no aviso 'já foi tratado'.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3000,
+        200
+      ],
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "aprovacoes"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email_id",
+              "keyValue": "={{ $('Busca Pendência').first().json.email_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "estado": "finalizado"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f300002b-0000-4000-8000-00000000002b",
+      "name": "Avisa Resultado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3000,
+        20
+      ],
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegramChatId }}",
+        "text": "={{ $('Config').first().json.modoSimulacao ? 'Simulação: aprovado, mas nada foi enviado.' : 'Resposta enviada.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "f300002c-0000-4000-8000-00000000002c",
+      "name": "Marca Aguardando Instrução",
+      "notes": "Marca o e-mail como esperando a sua instrução digitada.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        760
+      ],
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "aprovacoes"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email_id",
+              "keyValue": "={{ $('Busca Pendência').first().json.email_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "estado": "aguardando_instrucao"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f300002d-0000-4000-8000-00000000002d",
+      "name": "Pede Instrução",
+      "notes": "Pergunta no chat como você quer a resposta. O texto que você digitar a seguir é tratado pelo ramo de texto deste fluxo.",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2480,
+        760
+      ],
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegramChatId }}",
+        "text": "={{ (() => { const s = (x) => String(x || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); const r = $('Busca Pendência').first().json; return 'Como devo responder o e-mail de ' + s(r.remetente).slice(0, 100) + ' (' + s(r.assunto).slice(0, 100) + ')?\\n\\nEscreva aqui no chat o que você quer na resposta, ou digite ignorar.'; })() }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "f3000030-0000-4000-8000-000000000030",
+      "name": "Busca Aguardando",
+      "notes": "Lê os e-mails que esperam instrução. Sempre devolve algo, mesmo vazio, para o fluxo poder avisar que não há pendência.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "position": [
+        1080,
+        1200
+      ],
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "aprovacoes"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "estado",
+              "keyValue": "aguardando_instrucao"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f3000031-0000-4000-8000-000000000031",
+      "name": "Escolhe a Mais Recente",
+      "notes": "Python. Se mais de um e-mail espera instrução, o texto vale para o que foi marcado há menos tempo.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        1200
+      ],
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "# Entre os e-mails que esperam instrução, escolhe o atualizado mais recentemente.\nlinhas = [i['json'] for i in _items if i['json'].get('email_id')]\nif not linhas:\n    return [{'json': {'achou': False}}]\nmais_recente = sorted(linhas, key=lambda r: str(r.get('updatedAt', '')))[-1]\nresultado = dict(mais_recente)\nresultado['achou'] = True\nreturn [{'json': resultado}]\n"
+      }
+    },
+    {
+      "id": "f3000032-0000-4000-8000-000000000032",
+      "name": "Achou Pendência?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1640,
+        1200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3000032-0001-4000-8000-000000000001",
+              "leftValue": "={{ $json.achou }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000033-0000-4000-8000-000000000033",
+      "name": "Avisa Sem Pendência",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1920,
+        1440
+      ],
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegramChatId }}",
+        "text": "Não há nenhum e-mail esperando instrução.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "f3000034-0000-4000-8000-000000000034",
+      "name": "É Ignorar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        1200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3000034-0001-4000-8000-000000000001",
+              "leftValue": "={{ String($('Config').first().json.message.text || '').trim().toLowerCase() === 'ignorar' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000035-0000-4000-8000-000000000035",
+      "name": "Registra Descartado",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        1120
+      ],
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "emails_processados"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Escolhe a Mais Recente').first().json.email_id }}",
+            "thread_id": "={{ $('Escolhe a Mais Recente').first().json.thread_id }}",
+            "remetente": "={{ $('Escolhe a Mais Recente').first().json.remetente }}",
+            "assunto": "={{ $('Escolhe a Mais Recente').first().json.assunto }}",
+            "decisao": "descartado",
+            "motivo": "você digitou ignorar",
+            "tentativas": "={{ $('Escolhe a Mais Recente').first().json.tentativa }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "remetente",
+              "displayName": "remetente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "decisao",
+              "displayName": "decisao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tentativas",
+              "displayName": "tentativas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000036-0000-4000-8000-000000000036",
+      "name": "Marca Descartado",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2480,
+        1120
+      ],
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "aprovacoes"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email_id",
+              "keyValue": "={{ $('Escolhe a Mais Recente').first().json.email_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "estado": "finalizado"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000037-0000-4000-8000-000000000037",
+      "name": "Avisa Descartado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2760,
+        1120
+      ],
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegramChatId }}",
+        "text": "Ok, descartei esse e-mail.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "f3000038-0000-4000-8000-000000000038",
+      "name": "Calcula Tentativa",
+      "notes": "Soma a instrução digitada às anteriores (numeradas) e conta a tentativa.",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2200,
+        1400
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f3000038-0001-4000-8000-000000000001",
+              "name": "tentativa",
+              "value": "={{ Number($json.tentativa || 0) + 1 }}",
+              "type": "number"
+            },
+            {
+              "id": "f3000038-0002-4000-8000-000000000002",
+              "name": "instrucoes",
+              "value": "={{ ($json.instrucoes ? $json.instrucoes + '\\n' : '') + (Number($json.tentativa || 0) + 1) + '. ' + $('Config').first().json.message.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "f3000039-0000-4000-8000-000000000039",
+      "name": "Passou do Limite?",
+      "notes": "Sim: chegou ao máximo de instruções do Config, fecha como pendente. Não: reescreve.",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2480,
+        1400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3000039-0001-4000-8000-000000000001",
+              "leftValue": "={{ $json.tentativa >= $('Config').first().json.maxTentativas }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f300003a-0000-4000-8000-00000000003a",
+      "name": "Registra Pendente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2760,
+        1560
+      ],
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "emails_processados"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Calcula Tentativa').first().json.email_id }}",
+            "thread_id": "={{ $('Calcula Tentativa').first().json.thread_id }}",
+            "remetente": "={{ $('Calcula Tentativa').first().json.remetente }}",
+            "assunto": "={{ $('Calcula Tentativa').first().json.assunto }}",
+            "decisao": "pendente",
+            "motivo": "limite de tentativas",
+            "tentativas": "={{ $('Calcula Tentativa').first().json.tentativa }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "remetente",
+              "displayName": "remetente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "decisao",
+              "displayName": "decisao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tentativas",
+              "displayName": "tentativas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f300003b-0000-4000-8000-00000000003b",
+      "name": "Marca Pendente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3000,
+        1560
+      ],
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "aprovacoes"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email_id",
+              "keyValue": "={{ $('Calcula Tentativa').first().json.email_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "estado": "finalizado"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f300003c-0000-4000-8000-00000000003c",
+      "name": "Avisa Limite",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3240,
+        1560
+      ],
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegramChatId }}",
+        "text": "={{ 'Cheguei ao limite de ' + $('Config').first().json.maxTentativas + ' instruções sem uma versão aprovada para o e-mail de ' + String($('Calcula Tentativa').first().json.remetente || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '. Ele ficou pendente: responda à mão no Gmail.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "f300003d-0000-4000-8000-00000000003d",
+      "name": "Marca Reescrevendo",
+      "notes": "Guarda as instruções acumuladas e a contagem, e muda o estado para reescrevendo.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2760,
+        1760
+      ],
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "aprovacoes"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email_id",
+              "keyValue": "={{ $('Calcula Tentativa').first().json.email_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "instrucoes": "={{ $('Calcula Tentativa').first().json.instrucoes }}",
+            "tentativa": "={{ $('Calcula Tentativa').first().json.tentativa }}",
+            "estado": "reescrevendo"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "instrucoes",
+              "displayName": "instrucoes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tentativa",
+              "displayName": "tentativa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f300003e-0000-4000-8000-00000000003e",
+      "name": "Monta Pedido de Reescrita",
+      "notes": "Monta o que a Redação espera receber: o e-mail, as instruções acumuladas, o rascunho recusado e a contagem.",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3000,
+        1760
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f300003e-0001-4000-8000-000000000001",
+              "name": "id",
+              "value": "={{ $('Calcula Tentativa').first().json.email_id }}",
+              "type": "string"
+            },
+            {
+              "id": "f300003e-0002-4000-8000-000000000002",
+              "name": "threadId",
+              "value": "={{ $('Calcula Tentativa').first().json.thread_id }}",
+              "type": "string"
+            },
+            {
+              "id": "f300003e-0003-4000-8000-000000000003",
+              "name": "remetente",
+              "value": "={{ $('Calcula Tentativa').first().json.remetente }}",
+              "type": "string"
+            },
+            {
+              "id": "f300003e-0004-4000-8000-000000000004",
+              "name": "assunto",
+              "value": "={{ $('Calcula Tentativa').first().json.assunto }}",
+              "type": "string"
+            },
+            {
+              "id": "f300003e-0005-4000-8000-000000000005",
+              "name": "sinal",
+              "value": "={{ $('Calcula Tentativa').first().json.sinal }}",
+              "type": "string"
+            },
+            {
+              "id": "f300003e-0006-4000-8000-000000000006",
+              "name": "motivo",
+              "value": "={{ $('Calcula Tentativa').first().json.motivo }}",
+              "type": "string"
+            },
+            {
+              "id": "f300003e-0007-4000-8000-000000000007",
+              "name": "instrucoes",
+              "value": "={{ $('Calcula Tentativa').first().json.instrucoes }}",
+              "type": "string"
+            },
+            {
+              "id": "f300003e-0008-4000-8000-000000000008",
+              "name": "corpoAnterior",
+              "value": "={{ $('Calcula Tentativa').first().json.corpo }}",
+              "type": "string"
+            },
+            {
+              "id": "f300003e-0009-4000-8000-000000000009",
+              "name": "tentativa",
+              "value": "={{ $('Calcula Tentativa').first().json.tentativa }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f300003f-0000-4000-8000-00000000003f",
+      "name": "Avisa Reescrevendo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3240,
+        1700
+      ],
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegramChatId }}",
+        "text": "Anotado. Reescrevendo, já te mando a nova versão.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "f3000040-0000-4000-8000-000000000040",
+      "name": "Dispara Redação",
+      "notes": "Chama a Redação de novo para esse e-mail, com as instruções, sem esperar o fim. Ela salva o novo rascunho e manda a mensagem com os botões.",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3240,
+        1900
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "f300004a-0000-4000-8000-00000000004a",
+      "name": "Registra Resposta Própria",
+      "notes": "Anota o id da mensagem que o próprio assistente acabou de enviar. Ela cai na caixa de entrada e, sem esta linha, a Triagem a leria como e-mail novo e responderia a si mesma em loop.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2620,
+        300
+      ],
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "emails_processados"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $json.id }}",
+            "thread_id": "={{ $json.threadId }}",
+            "remetente": "={{ $('Busca Pendência').first().json.remetente }}",
+            "assunto": "={{ $('Busca Pendência').first().json.assunto }}",
+            "decisao": "resposta_propria",
+            "motivo": "mensagem enviada pelo próprio assistente",
+            "tentativas": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "remetente",
+              "displayName": "remetente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "decisao",
+              "displayName": "decisao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tentativas",
+              "displayName": "tentativas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000039",
+      "name": "Como Instalar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -940
+      ],
+      "parameters": {
+        "content": "## Como instalar\n1. Conecte Telegram e Gmail nos nós que pedem credencial.\n2. No nó **Config**, preencha `telegramChatId`. Só esse chat consegue aprovar.\n3. Escolha as Data Tables `aprovacoes` e `emails_processados` em todos os nós de tabela.\n4. No nó **Dispara Redação**, escolha o fluxo *Redação e Aprovação*.\n5. `modoSimulacao` vem ligado: o Sim registra o envio mas não manda e-mail. Desligue no **Config** quando quiser enviar de verdade.\n6. O n8n precisa ser alcançável pela internet (HTTPS), porque o Telegram entrega as mensagens por webhook.",
+        "height": 380,
+        "width": 760,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Gatilho Telegram": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "É Botão?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Botão?": {
+      "main": [
+        [
+          {
+            "node": "Lê Botão",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Busca Aguardando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lê Botão": {
+      "main": [
+        [
+          {
+            "node": "Confirma Toque",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Busca Pendência",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca Pendência": {
+      "main": [
+        [
+          {
+            "node": "Ainda Aguarda Aprovação?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ainda Aguarda Aprovação?": {
+      "main": [
+        [
+          {
+            "node": "É Sim?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisa Já Tratado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Sim?": {
+      "main": [
+        [
+          {
+            "node": "Modo Simulação?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marca Aguardando Instrução",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modo Simulação?": {
+      "main": [
+        [
+          {
+            "node": "Registra Simulado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Envia Resposta na Thread",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra Simulado": {
+      "main": [
+        [
+          {
+            "node": "Marca Finalizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra Enviado": {
+      "main": [
+        [
+          {
+            "node": "Marca Finalizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marca Finalizado": {
+      "main": [
+        [
+          {
+            "node": "Avisa Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marca Aguardando Instrução": {
+      "main": [
+        [
+          {
+            "node": "Pede Instrução",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca Aguardando": {
+      "main": [
+        [
+          {
+            "node": "Escolhe a Mais Recente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escolhe a Mais Recente": {
+      "main": [
+        [
+          {
+            "node": "Achou Pendência?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Achou Pendência?": {
+      "main": [
+        [
+          {
+            "node": "É Ignorar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisa Sem Pendência",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Ignorar?": {
+      "main": [
+        [
+          {
+            "node": "Registra Descartado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Calcula Tentativa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra Descartado": {
+      "main": [
+        [
+          {
+            "node": "Marca Descartado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marca Descartado": {
+      "main": [
+        [
+          {
+            "node": "Avisa Descartado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcula Tentativa": {
+      "main": [
+        [
+          {
+            "node": "Passou do Limite?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Passou do Limite?": {
+      "main": [
+        [
+          {
+            "node": "Registra Pendente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marca Reescrevendo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra Pendente": {
+      "main": [
+        [
+          {
+            "node": "Marca Pendente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marca Pendente": {
+      "main": [
+        [
+          {
+            "node": "Avisa Limite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marca Reescrevendo": {
+      "main": [
+        [
+          {
+            "node": "Monta Pedido de Reescrita",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta Pedido de Reescrita": {
+      "main": [
+        [
+          {
+            "node": "Avisa Reescrevendo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Dispara Redação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia Resposta na Thread": {
+      "main": [
+        [
+          {
+            "node": "Registra Resposta Própria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra Resposta Própria": {
+      "main": [
+        [
+          {
+            "node": "Registra Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

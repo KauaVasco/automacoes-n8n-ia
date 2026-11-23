@@ -1,51 +1,102 @@
-# Automação de E-mails e Reuniões com IA (n8n)
+# Assistente de E-mails com IA e aprovação no Telegram (n8n)
 
-Dois workflows n8n que trabalham juntos: um lê e-mails e escreve respostas com IA, o outro identifica pedidos de reunião, negocia o horário e agenda tudo automaticamente. Toda ação que sai pro mundo real (enviar e-mail, marcar reunião) passa por aprovação humana no Telegram antes.
+Três workflows n8n que leem e-mails novos do Gmail, ignoram os automáticos, escrevem uma resposta com IA e só enviam depois que você aprova no Telegram. Se você recusar, é só escrever no chat como a resposta deve ser, e o assistente reescreve até você aceitar.
 
-> **Ambiente:** feito e testado em `localhost`, rodando n8n via **Docker** (`n8nio/n8n`, SQLite local, sem domínio público, sem reverse proxy). Não é uma instância de produção — é um projeto pessoal/portfólio rodando na própria máquina. Ver [Se fosse rodar fora do localhost](#se-fosse-rodar-fora-do-localhost) pro que mudaria.
+> **Ambiente:** feito e testado em `localhost`, com n8n 2.48 rodando no Docker (`n8nio/n8n` mais `n8nio/runners`) e um túnel ngrok para o Telegram alcançar o webhook. É um projeto pessoal, não uma instância de produção.
 
 ## O que mudou nesta versão
 
-Este repositório começou como só a automação de e-mails, respondendo com rascunho + label `Regerar` no Gmail. Agora são dois workflows conectados:
+A versão anterior tinha dois workflows (agendamento de reuniões e automação de e-mails) e a aprovação ficava num nó de espera do Telegram. Esse nó abre uma página web para quem recusa, o que obrigava a expor o n8n por um link e não funcionava para digitar a instrução direto no chat. Esta versão refaz isso:
 
-- **`agendamento-reunioes.json`** é o ponto de entrada: todo e-mail novo passa por ele primeiro. Uma IA decide se é um pedido de reunião.
-- Se for reunião, ele mesmo cuida de tudo: pergunta o horário se faltar, consulta a agenda, pede aprovação no Telegram e marca no Google Calendar.
-- **Se não for sobre reunião**, ele chama `automacao-emails.json` como **sub-fluxo** (Execute Workflow, non-blocking) — que agora responde direto por e-mail em vez de deixar como rascunho, também com aprovação prévia no Telegram.
-
-Ou seja: a automação de e-mails deixou de ser standalone e virou uma peça de um sistema maior, chamada sob demanda.
+- A aprovação acontece inteira no chat do Telegram, com botões **Sim, enviar** e **Não**. Depois do **Não**, o bot pergunta o que mudar e você responde na própria conversa.
+- Um workflow de triagem separa o que é automático do que merece resposta.
+- O agendamento de reuniões ficou de fora. Os arquivos antigos continuam no histórico do Git.
 
 ## Como funciona
 
-### Agendamento de Reuniões (`agendamento-reunioes.json`)
+Três workflows, cada um com uma tarefa:
 
-E-mail novo chega → uma IA decide se é pedido de reunião → se tiver horário definido, consulta a agenda e pede aprovação no Telegram; se não tiver, uma IA escreve a pergunta de horário (com aprovação antes de enviar) e espera a resposta na mesma thread. Se a resposta não deixar um dia e horário claros, o fluxo avisa no Telegram em vez de tentar marcar algo errado na agenda. Aprovado, cria o evento no Google Calendar e confirma por e-mail; recusado, pede outro horário pra pessoa e volta a aguardar resposta na mesma thread (renegociação). Um segundo gatilho, rodando a cada 5 minutos, verifica reuniões já vencidas sem confirmação e avisa a outra pessoa se houve imprevisto.
+| Arquivo | O que faz |
+|---|---|
+| `triagem.json` | Vigia a caixa de entrada, descarta e-mails automáticos e chama a redação para os outros. |
+| `redacao-e-aprovacao.json` | Lê o e-mail e a conversa, escreve a resposta e manda o pedido de aprovação ao Telegram. |
+| `telegram.json` | Recebe os toques nos botões e o texto que você digita, envia a resposta ou pede a reescrita. |
 
-### Automação de E-mails (`automacao-emails.json`)
+### Triagem
 
-Chamado como sub-fluxo quando o e-mail não é sobre reunião. Lê o e-mail inteiro — texto, fotos, PDFs e planilhas anexadas, a IA enxerga imagem e PDF de verdade, não só o texto — e escreve uma resposta com tom natural, em parágrafos curtos, sem jargão. A resposta só é enviada (como reply direto na thread original) depois de aprovação no Telegram; recusada, a IA reescreve na hora guardando a tentativa anterior como contexto, sem precisar mexer em label do Gmail.
+O Gmail Trigger consulta a caixa a cada minuto, só na caixa de entrada e sem as abas Promoções, Social e Fóruns. Cada e-mail novo passa por uma checagem por regras, escrita em Python:
 
-**Resiliente a falha de modelo:** os dois workflows rodam a IA em cima do OpenRouter (modelo gratuito), com Gemini como fallback automático caso o principal falhe ou retorne vazio — os dois nodes de Agente têm `retryOnFail` configurado também, pra segurar falhas transitórias antes mesmo de cair no fallback.
+- **Sinais fortes**, que descartam o e-mail: cabeçalho `Auto-Submitted`, `Precedence: bulk/list/junk`, `List-Unsubscribe` ou `List-Id`, `X-Auto-Response-Suppress`, relatório de entrega (`multipart/report`), `Return-Path` vazio, remetente igual a um dos seus endereços e endereços do tipo `noreply`, `donotreply`, `mailer-daemon` e `postmaster`.
+- **Sinais prováveis**, como remetente com cara de notificação, categoria Atualizações do Gmail ou frases de aviso automático no assunto e no corpo. Esses e-mails seguem para o Telegram com um aviso ⚠️, e você decide.
 
-## Configuração — um lugar só pra editar
+Toda decisão fica registrada na tabela `emails_processados`, e um e-mail já registrado nunca é lido de novo. Quando o assistente envia uma resposta, o id dessa mensagem também entra na tabela. Sem isso, a resposta que volta para a sua caixa de entrada seria lida como e-mail novo e o assistente responderia a si mesmo.
 
-Cada workflow tem um node **`Config`** logo no início (Set node), com os campos que mudam de pessoa pra pessoa: `nomeUsuario`, `telegramChatId` e, no de reuniões, `calendarEmail`. Todo o resto do fluxo — prompts de IA, mensagens do Telegram — referencia esse node dinamicamente (`{{ $('Config').item.json.campo }}`), então reaproveitar este workflow é editar um node só, não caçar valor fixo espalhado.
+### Redação e aprovação
 
-> Os arquivos deste repositório já vêm com placeholders (`Seu Nome`, `SEU_CHAT_ID_TELEGRAM`, `seu-email@gmail.com`) no lugar dos meus dados reais — preencha com os seus depois de importar.
+Para cada e-mail que passou, o workflow busca as últimas cinco mensagens da conversa e baixa os anexos. PDFs e imagens seguem para o Gemini, que lê o conteúdo, e planilhas viram texto antes de ir para a IA. Anexos em `.docx` não são lidos. Esse caminho dos anexos está montado, mas ainda não foi testado com arquivos reais.
+
+O modelo principal é o Gemini, com o OpenRouter como reserva se o principal falhar. A resposta sai em formato estruturado: tipo do e-mail, se precisa de resposta, o motivo e o texto. As regras de estilo (parágrafos curtos, tom natural, sem jargão) e uma proteção contra instruções escondidas dentro do e-mail estão no prompt. Se a IA decide que não precisa responder, o workflow só registra o motivo.
+
+Quando precisa responder, ele salva a pendência na tabela `aprovacoes` e manda ao Telegram: quem escreveu, o assunto, o que o e-mail diz e "Irei responder assim", com os dois botões.
+
+### Telegram
+
+Só o chat configurado consegue aprovar.
+
+- **Sim, enviar:** responde na mesma conversa do Gmail, só ao remetente, com exatamente o texto aprovado.
+- **Não:** o bot pergunta como a resposta deve ficar. Você escreve a instrução (ou `ignorar` para descartar), o texto antigo volta para a IA junto com a instrução e uma nova versão chega com os botões. As instruções se acumulam, até o limite de cinco por e-mail.
+- Botão de uma mensagem antiga responde "Esse pedido já foi tratado".
+
+O campo `modoSimulacao` do nó `Config` vem ligado: o **Sim** registra o envio mas não manda e-mail. Desligue quando quiser enviar de verdade.
+
+As leituras do Gmail tentam de novo até três vezes, porque o Gmail às vezes derruba a conexão.
+
+## Configuração
+
+Cada workflow tem um nó `Config` logo no início, o único lugar para editar seus dados:
+
+| Workflow | Campo | O que colocar |
+|---|---|---|
+| Triagem | `meusEmails` | Seus endereços, separados por vírgula. E-mails enviados por eles são ignorados. |
+| Redação | `nomeUsuario` | O nome que assina a resposta. |
+| Redação e Telegram | `telegramChatId` | O ID do seu chat com o bot. |
+| Telegram | `modoSimulacao` | `true` para testar sem enviar, `false` para enviar. |
+
+Os arquivos deste repositório já vêm com placeholders (`voce@exemplo.com`, `Seu Nome`, `SEU_CHAT_ID_TELEGRAM`) no lugar dos dados reais.
 
 ## Como importar
 
-1. Abra seu n8n → **Workflows** → **Import from File** → importe **os dois arquivos**, `agendamento-reunioes.json` e `automacao-emails.json`.
-2. Conecte suas próprias credenciais nos nodes de Gmail (OAuth2), Telegram, OpenRouter, Google Gemini e Google Calendar — os arquivos não trazem nenhuma credencial, só o nome que cada node espera.
-3. Preencha o node `Config` de cada workflow com seus dados (nome, chat ID do Telegram, e-mail do calendário).
-4. **Reconecte a chamada entre os dois workflows:** o n8n gera um ID novo pra cada workflow importado, então o node `Executa Sub-fluxo de Automação de E-mail` (dentro de `agendamento-reunioes.json`) vai perder a referência pro workflow de e-mails. Abra esse node e selecione o workflow `Automação de Emails` recém-importado na lista.
-5. **Crie a label do Gmail `Horário Pendente`** e troque o ID dela nos 4 nodes que a usam (`Thread Tem Label Horário Pendente?`, `Aplica Label Horário Pendente`, `Remove Label Horário Pendente`, `Marca Thread Aguardando Novo Horário`) — o arquivo traz o ID da minha própria label, que só existe na minha conta.
-6. **Crie a Data Table `reunioes_agendadas`** (usada pra guardar o estado das reuniões) com as colunas: `pessoa`, `email_pessoa`, `datetime_reuniao`, `assunto`, `status`, `thread_id` — os tipos e nomes exatos estão na nota do node `Registra Reunião na Tabela`. Depois, reconecte o node dessa tabela (e os outros 3 que a usam) pra apontar pra ela.
-7. Ative os dois workflows.
+Cada workflow também traz um bloco "Como Instalar" na própria tela. O resumo:
+
+1. No n8n, vá em **Workflows**, **Import from File** e importe os três arquivos.
+2. Conecte as credenciais: Gmail (OAuth2), Telegram, Google Gemini e OpenRouter. Os arquivos trazem só os nomes que cada nó espera.
+3. Crie as duas Data Tables abaixo e escolha cada uma nos nós que usam tabela.
+4. Preencha o nó `Config` de cada workflow.
+5. Nos nós `Dispara Redação e Aprovação` (triagem) e `Dispara Redação` (telegram), escolha o workflow *Redação e Aprovação* que você importou. O n8n gera um ID novo na importação, então essa referência precisa ser refeita.
+6. Ative primeiro a **Redação e Aprovação**, depois a Triagem e o Telegram. O n8n não deixa publicar um workflow cujo sub-workflow está inativo.
+7. O n8n precisa de um endereço HTTPS alcançável pelo Telegram, porque o bot entrega as mensagens por webhook. Um túnel como o ngrok resolve para uso local.
+
+### Data Tables
+
+`emails_processados`, todas as colunas em texto, exceto `tentativas` (número):
+`message_id`, `thread_id`, `remetente`, `assunto`, `decisao`, `motivo`, `tentativas`.
+
+`aprovacoes`, todas em texto, exceto `tentativa` (número):
+`email_id`, `thread_id`, `remetente`, `assunto`, `corpo`, `instrucoes`, `tentativa`, `estado`, `sinal`, `motivo`.
+
+O campo `estado` percorre `aguardando_aprovacao`, `aguardando_instrucao`, `reescrevendo`, `finalizado` e `pendente`.
+
+## Limites conhecidos
+
+- Os Code nodes são em Python nativo, que precisa do task runner com Python (a imagem `n8nio/runners` tem).
+- O Gmail Trigger consulta a cada minuto, então a resposta ao Telegram não é instantânea.
+- Modelos gratuitos do Gemini e do OpenRouter podem usar o conteúdo enviado para treino. Para e-mails de clientes, use uma conta paga ou revise os termos.
+- E-mails que você manda de um endereço listado em `meusEmails` são ignorados. Para testar com um e-mail seu, mande de um endereço que não esteja na lista.
 
 ## Aviso
 
-Estes workflows foram feitos e testados ponta a ponta em ambiente real (Gmail + Telegram + Google Calendar + OpenRouter + Gemini). Compartilhados como referência/portfólio — ajuste os prompts e regras de negócio pro seu caso de uso antes de usar em produção.
+O ciclo de e-mail novo, triagem, rascunho, aprovação, reescrita e envio foi testado com Gmail, Telegram, Gemini e OpenRouter. Compartilhado como referência e portfólio: ajuste os prompts e as regras ao seu caso antes de usar com e-mails de verdade.
 
 ## Licença
 
-[MIT](LICENSE) — use, copie e adapte à vontade, mantendo os créditos.
+[MIT](LICENSE). Use, copie e adapte à vontade, mantendo os créditos.
