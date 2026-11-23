@@ -39,6 +39,8 @@ O modelo principal é o Gemini, com o OpenRouter como reserva se o principal fal
 
 Quando precisa responder, ele salva a pendência na tabela `aprovacoes` e manda ao Telegram: quem escreveu, o assunto, o que o e-mail diz e "Irei responder assim", com os dois botões.
 
+Quando o remetente pede algo que só o dono decide (confirmar um prazo, aceitar, recusar, passar valor ou data) e o e-mail não traz essa decisão, o rascunho não responde por conta própria. Ele deixa um marcador entre colchetes, como `[confirmar: dia]`, e a mensagem do Telegram começa com um aviso ⚠️. O **Sim** envia o texto exatamente como está, então, se houver colchetes, toque em **Não** e diga o que colocar.
+
 ### Telegram
 
 Só o chat configurado consegue aprovar.
