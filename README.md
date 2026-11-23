@@ -35,7 +35,7 @@ Toda decisão fica registrada na tabela `emails_processados`, e um e-mail já re
 
 Para cada e-mail que passou, o workflow busca as últimas cinco mensagens da conversa e baixa os anexos. PDFs e imagens seguem para o Gemini, que lê o conteúdo, e planilhas viram texto antes de ir para a IA. Anexos em `.docx` não são lidos. Esse caminho dos anexos está montado, mas ainda não foi testado com arquivos reais.
 
-O modelo principal é o Gemini, com o OpenRouter como reserva se o principal falhar. A resposta sai em formato estruturado: tipo do e-mail, se precisa de resposta, o motivo e o texto. As regras de estilo (parágrafos curtos, tom natural, sem jargão) e uma proteção contra instruções escondidas dentro do e-mail estão no prompt. Se a IA decide que não precisa responder, o workflow só registra o motivo.
+O modelo principal é o Gemini, com o OpenRouter como reserva se o principal falhar. A resposta sai em formato estruturado: tipo do e-mail, se precisa de resposta, o motivo e o texto. O prompt traz regras de estilo (parágrafos curtos, tom natural, resposta logo na primeira frase) e uma lista do que denuncia texto de máquina: contraste "não é X, é Y", frase de efeito no fim, travessão, três itens por ritmo, palavras infladas e fórmulas como "fico à disposição". Ele também traz uma proteção contra instruções escondidas dentro do e-mail. Se a IA decide que não precisa responder, o workflow só registra o motivo.
 
 Quando precisa responder, ele salva a pendência na tabela `aprovacoes` e manda ao Telegram: quem escreveu, o assunto, o que o e-mail diz e "Irei responder assim", com os dois botões.
 
