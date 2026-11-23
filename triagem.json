@@ -1,0 +1,451 @@
+{
+  "name": "Assistente de E-mails - Triagem",
+  "nodes": [
+    {
+      "id": "a1000001-0000-4000-8000-000000000001",
+      "name": "Banner Geral",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -420
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 2000,
+        "height": 360,
+        "content": "## Assistente de e-mails: Triagem\n\nPrimeira metade do assistente. Lê cada e-mail novo da caixa de entrada, confere se já foi tratado, olha os cabeçalhos e o endereço de quem enviou e decide se parece automático. Sinal forte: registra o motivo na tabela emails_processados e para. Os outros seguem para o fluxo Assistente de E-mails - Redação e Aprovação.\n\n**Como funciona**\n- O gatilho consulta o Gmail a cada minuto, só na caixa de entrada, sem Promoções, Social e Fóruns.\n- Sinal forte: cabeçalho de resposta automática, de lista de e-mail ou de entrega falha, endereço noreply, ou o remetente ser você.\n- Sinal provável (endereço de notificação, categoria Atualizações, assunto ou texto típicos) não ignora: segue com aviso.\n\n**Por que é assim**\n- Ignorar um e-mail de pessoa por engano some com ele em silêncio. Deixar passar um automático custa um toque no Telegram. Por isso só o sinal forte ignora.\n- Cada e-mail vira uma execução própria no fluxo de Redação, para uma aprovação parada não travar os outros.\n\nÚltima mudança: 23/11/2026, fluxo criado e ligado ao fluxo de Redação e Aprovação. Ainda inativo."
+      }
+    },
+    {
+      "id": "a1000002-0000-4000-8000-000000000002",
+      "name": "Zona - Entrada",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        120
+      ],
+      "parameters": {
+        "color": 4,
+        "width": 1140,
+        "height": 420,
+        "content": "### Entrada\n\nGatilho do Gmail, descarte do que já foi tratado (tabela emails_processados) e leitura do e-mail completo, com cabeçalhos."
+      }
+    },
+    {
+      "id": "a1000003-0000-4000-8000-000000000003",
+      "name": "Zona - Triagem por Regras",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        120
+      ],
+      "parameters": {
+        "color": 6,
+        "width": 560,
+        "height": 420,
+        "content": "### Triagem por regras\n\nConfig com os seus endereços e o código Python que procura sinais de e-mail automático. Sem IA e sem custo."
+      }
+    },
+    {
+      "id": "a1000004-0000-4000-8000-000000000004",
+      "name": "Zona - Destino",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        120
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 420,
+        "height": 560,
+        "content": "### Destino\n\nSinal forte: registra o motivo e para. Os demais seguem para a Redação."
+      }
+    },
+    {
+      "id": "a1000010-0000-4000-8000-000000000010",
+      "name": "Gatilho Gmail",
+      "notes": "Consulta o Gmail a cada minuto. Só caixa de entrada e sem as categorias Promoções, Social e Fóruns. Atualizações entra de propósito: as regras decidem.",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "labelIds": [
+            "INBOX"
+          ],
+          "q": "-category:promotions -category:social -category:forums"
+        }
+      }
+    },
+    {
+      "id": "a1000011-0000-4000-8000-000000000011",
+      "name": "Já Foi Processado?",
+      "notes": "Deixa passar só o e-mail que ainda não está na tabela emails_processados. Evita tratar o mesmo e-mail duas vezes.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        300
+      ],
+      "parameters": {
+        "operation": "rowNotExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "emails_processados"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "message_id",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a1000012-0000-4000-8000-000000000012",
+      "name": "Busca Mensagem Completa",
+      "notes": "Lê o e-mail inteiro, com os cabeçalhos em minúsculas (headers). Os anexos só são baixados no fluxo de Redação.",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        544,
+        300
+      ],
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000013-0000-4000-8000-000000000013",
+      "name": "Config",
+      "notes": "Único lugar para editar. meusEmails: seus endereços separados por vírgula. Um e-mail enviado por um deles é ignorado, para o assistente nunca responder a si mesmo.",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        816,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1000013-0001-4000-8000-000000000001",
+              "name": "meusEmails",
+              "value": "voce@exemplo.com",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000014-0000-4000-8000-000000000014",
+      "name": "Classifica por Regras",
+      "notes": "Python. Procura sinais de e-mail automático e devolve sinal (forte, provavel ou nenhum) e os motivos. Fortes: Auto-Submitted, Precedence, List-Unsubscribe ou List-Id, X-Auto-Response-Suppress, relatório de entrega, Return-Path vazio, remetente você, endereço noreply. Prováveis: endereço de notificação, categoria Atualizações, assunto ou texto típicos.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        300
+      ],
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "# Triagem por regras. Lê os cabeçalhos do Gmail (nomes em minúsculas) e o endereço de quem enviou.\n# sinal 'forte' = ignorar. 'provavel' = seguir para o Telegram com aviso. 'nenhum' = e-mail de pessoa.\nPREFIXOS_FORTES = ('noreply', 'donotreply', 'mailerdaemon', 'postmaster')\nPREFIXOS_PROVAVEIS = ('notification', 'notificacao', 'notificacoes', 'alert', 'automated', 'automatico', 'bounce', 'system', 'sistema', 'mailer')\nASSUNTOS_PROVAVEIS = ('resposta automática', 'resposta automatica', 'fora do escritório', 'fora do escritorio', 'out of office', 'automatic reply', 'autoreply', 'código de verificação', 'codigo de verificacao', 'verification code', 'delivery status notification', 'undeliverable', 'fatura')\nCORPOS_PROVAVEIS = ('não responda este e-mail', 'nao responda este e-mail', 'não responda a este e-mail', 'nao responda a este e-mail', 'do not reply to this email', 'do not reply to this e-mail', 'this is an automated')\n\n\ndef cab(h, nome):\n    valor = h.get(nome, '')\n    if isinstance(valor, list):\n        valor = ' '.join(str(v) for v in valor)\n    valor = str(valor).strip()\n    # O Gmail devolve o valor com o nome na frente (ex.: 'Precedence: bulk'). Tira o prefixo.\n    if valor.lower().startswith(nome + ':'):\n        valor = valor[len(nome) + 1:]\n    return valor.strip().lower()\n\n\nsaida = []\nfor item in _items:\n    msg = item['json']\n    h = msg.get('headers') or {}\n    de = (((msg.get('from') or {}).get('value')) or [{}])[0]\n    remetente = str(de.get('address', '')).lower()\n    meus = [e.strip().lower() for e in str(msg.get('meusEmails', '')).split(',') if e.strip()]\n    local = remetente.split('@')[0].replace('-', '').replace('_', '').replace('.', '')\n    assunto = msg.get('subject') or ''\n    corpo = (msg.get('text') or '').lower()[:3000]\n    rotulos = msg.get('labelIds') or []\n\n    fortes = []\n    auto = cab(h, 'auto-submitted')\n    if auto and auto != 'no':\n        fortes.append('cabeçalho Auto-Submitted: ' + auto)\n    if cab(h, 'precedence') in ('bulk', 'list', 'junk'):\n        fortes.append('cabeçalho Precedence: ' + cab(h, 'precedence'))\n    if 'list-unsubscribe' in h or 'list-id' in h:\n        fortes.append('lista de e-mail (List-Unsubscribe ou List-Id)')\n    if 'x-auto-response-suppress' in h:\n        fortes.append('cabeçalho X-Auto-Response-Suppress')\n    if 'multipart/report' in cab(h, 'content-type'):\n        fortes.append('relatório de entrega (multipart/report)')\n    if cab(h, 'return-path') == '<>':\n        fortes.append('Return-Path vazio (e-mail devolvido)')\n    if remetente and remetente in meus:\n        fortes.append('o remetente é você')\n    if local.startswith(PREFIXOS_FORTES):\n        fortes.append('endereço de remetente automático: ' + remetente)\n\n    provaveis = []\n    if local.startswith(PREFIXOS_PROVAVEIS):\n        provaveis.append('endereço de notificação: ' + remetente)\n    if 'CATEGORY_UPDATES' in rotulos:\n        provaveis.append('categoria Atualizações do Gmail')\n    if any(t in assunto.lower() for t in ASSUNTOS_PROVAVEIS):\n        provaveis.append('assunto típico de e-mail automático')\n    if any(t in corpo for t in CORPOS_PROVAVEIS):\n        provaveis.append('texto pede para não responder')\n\n    motivos = fortes + provaveis\n    saida.append({'json': {\n        'id': msg.get('id'),\n        'threadId': msg.get('threadId'),\n        'remetente': remetente,\n        'nomeRemetente': de.get('name', ''),\n        'assunto': assunto,\n        'sinal': 'forte' if fortes else ('provavel' if provaveis else 'nenhum'),\n        'motivos': motivos,\n        'motivo': '; '.join(motivos),\n    }})\n\nreturn saida\n"
+      }
+    },
+    {
+      "id": "a1000015-0000-4000-8000-000000000015",
+      "name": "Sinal Forte?",
+      "notes": "Sim: é automático com certeza, registra e para. Não: segue para a Redação (com aviso, se o sinal for provável).",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1376,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a1000015-0001-4000-8000-000000000001",
+              "leftValue": "={{ $json.sinal }}",
+              "rightValue": "forte",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000016-0000-4000-8000-000000000016",
+      "name": "Registra Ignorado",
+      "notes": "Guarda o e-mail ignorado e o motivo na tabela emails_processados. É o que permite conferir depois se alguma regra errou.",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        220
+      ],
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "emails_processados"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $json.id }}",
+            "thread_id": "={{ $json.threadId }}",
+            "remetente": "={{ $json.remetente }}",
+            "assunto": "={{ $json.assunto }}",
+            "decisao": "ignorado_automatico",
+            "motivo": "={{ $json.motivo }}",
+            "tentativas": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "remetente",
+              "displayName": "remetente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "decisao",
+              "displayName": "decisao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tentativas",
+              "displayName": "tentativas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000018-0000-4000-8000-000000000018",
+      "name": "Dispara Redação e Aprovação",
+      "notes": "Chama o fluxo de Redação e Aprovação uma vez por e-mail e não espera o fim, para uma aprovação parada não travar os outros e-mails.",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1680,
+        440
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "name": "Como Instalar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -840
+      ],
+      "parameters": {
+        "content": "## Como instalar\n1. Conecte sua credencial do Gmail nos dois nós do Gmail.\n2. No nó **Config**, troque `voce@exemplo.com` pelos seus endereços, separados por vírgula.\n3. Crie a Data Table `emails_processados` (colunas em texto: message_id, thread_id, remetente, assunto, decisao, motivo; e tentativas em número) e escolha ela nos três nós de tabela.\n4. No nó **Dispara Redação e Aprovação**, escolha o fluxo *Redação e Aprovação* já importado.\n5. Ative este fluxo por último.",
+        "height": 380,
+        "width": 760,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Gatilho Gmail": {
+      "main": [
+        [
+          {
+            "node": "Já Foi Processado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já Foi Processado?": {
+      "main": [
+        [
+          {
+            "node": "Busca Mensagem Completa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca Mensagem Completa": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Classifica por Regras",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classifica por Regras": {
+      "main": [
+        [
+          {
+            "node": "Sinal Forte?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sinal Forte?": {
+      "main": [
+        [
+          {
+            "node": "Registra Ignorado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispara Redação e Aprovação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
